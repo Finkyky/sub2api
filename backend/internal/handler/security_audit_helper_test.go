@@ -9,6 +9,7 @@ import (
 
 	"github.com/Wei-Shaw/sub2api/internal/securityaudit"
 	middleware2 "github.com/Wei-Shaw/sub2api/internal/server/middleware"
+	"github.com/Wei-Shaw/sub2api/internal/service"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
@@ -179,4 +180,34 @@ func (e *turnCountingEngine) Evaluate(context.Context, securityaudit.Request) (*
 		return e.decisions[call-1], nil
 	}
 	return &securityaudit.PromptDecision{Kind: securityaudit.DecisionAllow, AllowNextStage: true}, nil
+}
+
+func TestPluginGatewaySecurityAuditCompletionTracksBodyAndGroup(t *testing.T) {
+	for _, kind := range []string{"body", "group"} {
+		t.Run(kind, func(t *testing.T) {
+			engine := &turnCountingEngine{mode: securityaudit.ModeBlocking, decisions: []*securityaudit.PromptDecision{{Kind: securityaudit.DecisionAllow, AllowNextStage: true}, {Kind: securityaudit.DecisionBlock, AllowNextStage: false}}}
+			coordinator := securityaudit.NewCoordinator(nil, engine)
+			c, _ := gin.CreateTestContext(httptest.NewRecorder())
+			c.Request = httptest.NewRequest("POST", "/v1/messages", nil)
+			c.Set(pluginGatewayStateKey, &pluginGatewayState{})
+			gid := int64(42)
+			key := &service.APIKey{ID: 1, GroupID: &gid, Group: &service.Group{ID: gid}}
+			first := runSecurityAudit(c, nil, coordinator, nil, key, middleware2.AuthSubject{UserID: 7}, "anthropic_messages", "m", []byte("original"), "http")
+			require.True(t, first.AllowNextStage)
+			same := runSecurityAudit(c, nil, coordinator, nil, key, middleware2.AuthSubject{UserID: 7}, "anthropic_messages", "m", []byte("original"), "http")
+			require.Nil(t, same)
+			require.EqualValues(t, 1, engine.evaluates.Load())
+			body := []byte("original")
+			if kind == "group" {
+				gid = 43
+				key.Group = &service.Group{ID: gid}
+			} else {
+				body = []byte("changed")
+			}
+			second := runSecurityAudit(c, nil, coordinator, nil, key, middleware2.AuthSubject{UserID: 7}, "anthropic_messages", "m", body, "http")
+			require.NotNil(t, second)
+			require.False(t, second.AllowNextStage)
+			require.EqualValues(t, 2, engine.evaluates.Load())
+		})
+	}
 }

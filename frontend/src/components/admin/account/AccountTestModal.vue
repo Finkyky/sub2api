@@ -326,7 +326,7 @@
         >
           {{ t('common.close') }}
         </button>
-        <button
+        <button v-permission="'accounts.update'"
           @click="startTest"
           :disabled="!canStartTest"
           :class="[

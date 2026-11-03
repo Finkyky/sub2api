@@ -119,7 +119,7 @@
             </div>
 
             <!-- Individual test button -->
-            <button
+            <button v-permission="'proxies.update'"
               type="button"
               @click.stop="handleTestProxy(proxy)"
               :disabled="testingProxyIds.has(proxy.id)"

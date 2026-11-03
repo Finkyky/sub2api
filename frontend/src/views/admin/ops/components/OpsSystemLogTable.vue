@@ -462,10 +462,10 @@ onMounted(async () => {
               </label>
             </div>
             <div class="flex flex-wrap items-center gap-2 lg:justify-end">
-              <button type="button" class="btn btn-primary btn-sm" :disabled="runtimeSaving || runtimeLoading || !runtimeConfigLoaded" @click="saveRuntimeConfig">
+              <button v-permission="'ops.manage'" type="button" class="btn btn-primary btn-sm" :disabled="runtimeSaving || runtimeLoading || !runtimeConfigLoaded" @click="saveRuntimeConfig">
                 {{ runtimeSaving ? t('common.saving') : t('admin.ops.systemLogs.saveAndApply') }}
               </button>
-              <button type="button" class="btn btn-secondary btn-sm" :disabled="runtimeSaving" @click="resetRuntimeConfig">
+              <button v-permission="'ops.manage'" type="button" class="btn btn-secondary btn-sm" :disabled="runtimeSaving" @click="resetRuntimeConfig">
                 {{ t('admin.ops.systemLogs.resetDefaults') }}
               </button>
             </div>
@@ -538,7 +538,7 @@ onMounted(async () => {
     <div class="mb-3 flex flex-wrap gap-2">
       <button type="button" class="btn btn-primary btn-sm" @click="applyFilters">{{ t('admin.ops.systemLogs.search') }}</button>
       <button type="button" class="btn btn-secondary btn-sm" @click="resetFilters">{{ t('common.reset') }}</button>
-      <button type="button" class="btn btn-danger btn-sm" @click="cleanupCurrentFilter">{{ t('admin.ops.systemLogs.cleanCurrentFilters') }}</button>
+      <button v-permission="'ops.manage'" type="button" class="btn btn-danger btn-sm" @click="cleanupCurrentFilter">{{ t('admin.ops.systemLogs.cleanCurrentFilters') }}</button>
       <button type="button" class="btn btn-secondary btn-sm" @click="fetchHealth">{{ t('admin.ops.systemLogs.refreshHealth') }}</button>
     </div>
 

@@ -1757,6 +1757,40 @@ func TestFetchCodexModelsManifestPassthrough(t *testing.T) {
 	}
 }
 
+func TestFetchCodexModelsManifestPreservesCodex166CatalogFields(t *testing.T) {
+	// Empty clientVersion exercises the built-in default rather than echoing an
+	// explicitly supplied test value. The official OAuth request is
+	// GET /backend-api/codex/models?client_version=0.166.0 with ETag support.
+	SetCodexCanonicalUserAgentResolver(nil)
+	t.Cleanup(func() { SetCodexCanonicalUserAgentResolver(nil) })
+
+	manifestBody := `{"models":[{"slug":"gpt-6.1-sol","display_name":"GPT-6.1 Sol","guardian":{"shell":{"approval":"on_request"}},"model_messages":{"instructions_template":"base"},"available_access_programs":{"kind":"chatgpt"},"supports_experimental_context":true,"supports_reasoning_effort_updates":true,"use_responses_lite":true,"multi_agent_version":"v2"}]}`
+
+	var gotURL, gotUA, gotOriginator, gotVersion string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotURL = r.URL.String()
+		gotUA = r.Header.Get("User-Agent")
+		gotOriginator = r.Header.Get("Originator")
+		gotVersion = r.Header.Get("Version")
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(manifestBody))
+	}))
+	defer server.Close()
+
+	original := chatgptCodexModelsURL
+	chatgptCodexModelsURL = server.URL + "/backend-api/codex/models"
+	defer func() { chatgptCodexModelsURL = original }()
+
+	s := &OpenAIGatewayService{}
+	manifest, err := s.FetchCodexModelsManifest(context.Background(), newCodexModelsTestAccount(), "", "")
+	require.NoError(t, err)
+	require.Equal(t, "/backend-api/codex/models?client_version=0.166.0", gotURL)
+	require.Equal(t, openai.CodexDefaultOriginator, gotOriginator)
+	require.Equal(t, codexCLIUserAgent, gotUA)
+	require.Equal(t, codexCLIVersion, gotVersion)
+	require.JSONEq(t, manifestBody, string(manifest.Body))
+}
+
 func TestFetchCodexModelsManifestAgentIdentityUsesAssertionWithoutOAuthToken(t *testing.T) {
 	key, privateKey := newTestAgentIdentityKey(t)
 	account := &Account{

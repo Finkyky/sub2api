@@ -35,6 +35,7 @@ func RegisterPaymentRoutes(
 	settingService *service.SettingService,
 	panelRateLimiter *middleware.PanelRateLimiter,
 	redisClient *redis.Client,
+	rbac ...middleware.PermissionChecker,
 ) {
 	// --- User-facing payment endpoints (authenticated) ---
 	authenticated := v1.Group("/payment")
@@ -93,6 +94,7 @@ func RegisterPaymentRoutes(
 	adminGroup.Use(gin.HandlerFunc(adminAuth))
 	adminGroup.Use(panelRateLimiter.Global())
 	adminGroup.Use(gin.HandlerFunc(auditLog))
+	adminGroup.Use(middleware.RequireAdminRoutePermission(rbac...))
 	adminGroup.Use(middleware.AdminComplianceGuard(settingService))
 	{
 		// Dashboard

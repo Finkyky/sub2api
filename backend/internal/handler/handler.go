@@ -7,6 +7,7 @@ import (
 
 // AdminHandlers contains all admin-related HTTP handlers
 type AdminHandlers struct {
+	RBAC                   *admin.RBACHandler
 	Dashboard              *admin.DashboardHandler
 	User                   *admin.UserHandler
 	Group                  *admin.GroupHandler
@@ -32,6 +33,8 @@ type AdminHandlers struct {
 	ErrorPassthrough       *admin.ErrorPassthroughHandler
 	TLSFingerprintProfile  *admin.TLSFingerprintProfileHandler
 	Plugin                 *admin.PluginHandler
+	PluginInstance         *admin.PluginInstanceHandler
+	PluginTask             *admin.PluginTaskHandler
 	APIKey                 *admin.AdminAPIKeyHandler
 	ScheduledTest          *admin.ScheduledTestHandler
 	Channel                *admin.ChannelHandler
@@ -47,6 +50,7 @@ type AdminHandlers struct {
 
 // Handlers contains all HTTP handlers
 type Handlers struct {
+	PluginGateway    *PluginGatewayHandler
 	Auth             *AuthHandler
 	User             *UserHandler
 	MCPOAuth         *MCPOAuthHandler

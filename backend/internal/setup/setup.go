@@ -385,7 +385,10 @@ func initializeDatabase(cfg *SetupConfig) error {
 
 	migrationCtx, cancel := context.WithTimeout(context.Background(), cfg.migrationTimeout())
 	defer cancel()
-	return repository.ApplyMigrations(migrationCtx, db)
+	if err := repository.ApplyMigrations(migrationCtx, db); err != nil {
+		return err
+	}
+	return repository.SyncRBAC(migrationCtx, db)
 }
 
 func (cfg *SetupConfig) migrationTimeout() time.Duration {
@@ -460,23 +463,46 @@ func bootstrapAdminUser(ctx context.Context, db *sql.DB, cfg *SetupConfig) (bool
 		return false, "", err
 	}
 
-	_, err = db.ExecContext(
-		ctx,
-		`INSERT INTO users (email, password_hash, role, balance, concurrency, status, created_at, updated_at)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
-		admin.Email,
-		admin.PasswordHash,
-		admin.Role,
-		admin.Balance,
-		admin.Concurrency,
-		admin.Status,
-		admin.CreatedAt,
-		admin.UpdatedAt,
-	)
-	if err != nil {
+	if err := insertBootstrapAdmin(ctx, db, admin); err != nil {
 		return false, "", err
 	}
 	return true, decision.reason, nil
+}
+
+func insertBootstrapAdmin(ctx context.Context, db *sql.DB, admin *service.User) error {
+	tx, err := db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	var adminID int64
+	err = tx.QueryRowContext(ctx,
+		`INSERT INTO users (email, password_hash, role, balance, concurrency, status, created_at, updated_at)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+		 RETURNING id`,
+		admin.Email, admin.PasswordHash, admin.Role, admin.Balance, admin.Concurrency,
+		admin.Status, admin.CreatedAt, admin.UpdatedAt,
+	).Scan(&adminID)
+	if err != nil {
+		return err
+	}
+	assignment, err := tx.ExecContext(ctx,
+		`INSERT INTO user_roles (user_id, role_id)
+		 SELECT $1, id FROM roles WHERE code = 'super_admin'
+		 ON CONFLICT (user_id, role_id) DO NOTHING`, adminID,
+	)
+	if err != nil {
+		return err
+	}
+	affected, err := assignment.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("check bootstrap super_admin role assignment: %w", err)
+	}
+	if affected != 1 {
+		return fmt.Errorf("bootstrap super_admin role assignment: expected 1 row, got %d", affected)
+	}
+	return tx.Commit()
 }
 
 // prepareAdminCredentials fills in missing admin credentials with random values

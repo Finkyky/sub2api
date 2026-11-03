@@ -72,7 +72,7 @@
         <button class="btn btn-secondary" @click="$emit('close')">
           {{ t('common.cancel') }}
         </button>
-        <button
+        <button v-permission="'channels.update'"
           class="btn btn-primary"
           :disabled="submitting || selectedIds.length === 0"
           @click="handleApply"

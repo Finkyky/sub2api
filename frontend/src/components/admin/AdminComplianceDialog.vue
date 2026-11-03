@@ -82,7 +82,7 @@
         >
           {{ t('adminCompliance.logout') }}
         </button>
-        <button
+        <button v-permission="'compliance.accept'"
           type="button"
           class="btn btn-primary"
           :disabled="!canSubmit || complianceStore.submitting"

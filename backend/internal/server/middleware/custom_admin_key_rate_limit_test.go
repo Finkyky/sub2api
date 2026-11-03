@@ -29,7 +29,7 @@ func TestScopedAdminKeyPanelRateLimitAuthenticatedRead(t *testing.T) {
 	allower := &fakePanelAllower{}
 	p := &PanelRateLimiter{limiter: allower, settingService: settings}
 	r := gin.New()
-	r.Use(gin.HandlerFunc(NewAdminAuthMiddleware(nil, users, settings, nil)), p.Global())
+	r.Use(gin.HandlerFunc(NewAdminAuthMiddleware(nil, users, settings, nil, nil)), p.Global())
 	r.GET("/api/v1/admin/users", func(c *gin.Context) { c.Status(http.StatusNoContent) })
 	request := func() *httptest.ResponseRecorder {
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/admin/users", nil)
@@ -103,7 +103,7 @@ func TestScopedAdminKeyPanelRateLimitAuthenticatedSensitiveWrite(t *testing.T) {
 			}}, nil, nil, nil)
 			p := &PanelRateLimiter{limiter: &fakePanelAllower{err: tc.redisErr}, settingService: settings}
 			r := gin.New()
-			r.Use(gin.HandlerFunc(NewAdminAuthMiddleware(nil, users, settings, nil)), p.Global())
+			r.Use(gin.HandlerFunc(NewAdminAuthMiddleware(nil, users, settings, nil, nil)), p.Global())
 			r.POST("/api/v1/admin/users/:id/balance", func(c *gin.Context) { c.Status(http.StatusNoContent) })
 			for _, want := range tc.wantCodes {
 				req := httptest.NewRequest(http.MethodPost, "/api/v1/admin/users/12/balance", nil)

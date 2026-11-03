@@ -7,6 +7,7 @@ import (
 	"sync"
 	"sync/atomic"
 
+	"github.com/Wei-Shaw/sub2api/internal/pkg/codexclient"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/openai"
 	"github.com/google/uuid"
 )
@@ -130,6 +131,12 @@ type codexOutboundIdentity struct {
 	version    string
 }
 
+var codexLinuxClientProfile atomic.Bool
+
+func SetCodexClientProfile(profile string) {
+	codexLinuxClientProfile.Store(profile == codexclient.Profile)
+}
+
 // resolveCodexOutboundIdentity 由候选 User-Agent 推导自洽的出站身份。
 // candidateUA 为空时使用规范 User-Agent；推导不出官方身份时整体回退为规范 CLI 身份。
 //
@@ -138,6 +145,9 @@ type codexOutboundIdentity struct {
 // 永久钉死在陈旧版本上，绕过版本自动同步，落回上游身份风控更严格的一侧。
 // 需要固定版本请填「Codex 客户端版本号」并关闭自动同步。
 func resolveCodexOutboundIdentity(candidateUA string) codexOutboundIdentity {
+	if codexLinuxClientProfile.Load() {
+		return codexOutboundIdentity{userAgent: codexclient.UserAgent, originator: codexclient.Originator, version: codexclient.Version}
+	}
 	canonical := codexCanonicalUserAgent()
 	if _, _, ok := openai.PairCodexClientIdentity(canonical); !ok {
 		canonical = codexCLIUserAgent

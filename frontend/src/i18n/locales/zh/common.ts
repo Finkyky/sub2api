@@ -1,5 +1,7 @@
 export default {
   common: {
+    accessDenied: '访问被拒绝',
+    accessDeniedHint: '您的账户没有访问此页面的权限，请联系管理员。',
     loading: '加载中...',
     submitting: '提交中...',
     justNow: '刚刚',
@@ -163,6 +165,8 @@ export default {
 
   // Navigation
   nav: {
+    permissions: '权限管理',
+    roles: '角色管理',
     dashboard: '仪表盘',
     announcements: '公告',
     apiKeys: 'API 密钥',
@@ -175,6 +179,10 @@ export default {
     affiliateRebateRecords: '返利记录',
     affiliateTransferRecords: '提取记录',
     profile: '个人资料',
+    usersList: '用户列表',
+    pluginPackages: '插件包',
+    operationsManagement: '运营管理',
+    monitoringManagement: '运行监控',
     users: '用户管理',
     groups: '分组管理',
     channels: '渠道管理',
@@ -183,6 +191,10 @@ export default {
     subscriptions: '订阅管理',
     accounts: '账号管理',
     plugins: '插件管理',
+    pluginInstances: '插件实例',
+    pluginBindings: '插件组绑定',
+    pluginTasks: '插件任务',
+    pluginRuns: '插件执行记录',
     proxies: 'IP管理',
     redeemCodes: '兑换码',
     ops: '运维监控',

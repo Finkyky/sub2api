@@ -30,7 +30,7 @@
             >
               <Icon name="refresh" size="md" :class="loading ? 'animate-spin' : ''" />
             </button>
-            <button @click="showCreateDialog = true" class="btn btn-primary">
+            <button v-permission="'promo_codes.create'" @click="showCreateDialog = true" class="btn btn-primary">
               <Icon name="plus" size="md" class="mr-1" />
               {{ t('admin.promo.createCode') }}
             </button>
@@ -125,14 +125,14 @@
               >
                 <Icon name="eye" size="sm" />
               </button>
-              <button
+              <button v-permission="'promo_codes.update'"
                 @click="handleEdit(row)"
                 class="flex flex-col items-center gap-0.5 rounded-lg p-1.5 text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-700 dark:hover:bg-dark-600 dark:hover:text-gray-300"
                 :title="t('common.edit')"
               >
                 <Icon name="edit" size="sm" />
               </button>
-              <button
+              <button v-permission="'promo_codes.delete'"
                 @click="handleDelete(row)"
                 class="flex flex-col items-center gap-0.5 rounded-lg p-1.5 text-gray-500 transition-colors hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-900/20 dark:hover:text-red-400"
                 :title="t('common.delete')"
@@ -163,7 +163,7 @@
       width="normal"
       @close="showCreateDialog = false"
     >
-      <form id="create-promo-form" @submit.prevent="handleCreate" class="space-y-4">
+      <form v-permission="'promo_codes.create'" id="create-promo-form" @submit.prevent="handleCreate" class="space-y-4">
         <div>
           <label class="input-label">
             {{ t('admin.promo.code') }}
@@ -228,7 +228,7 @@
           <button type="button" @click="showCreateDialog = false" class="btn btn-secondary">
             {{ t('common.cancel') }}
           </button>
-          <button type="submit" form="create-promo-form" :disabled="creating" class="btn btn-primary">
+          <button v-permission="'promo_codes.create'" type="submit" form="create-promo-form" :disabled="creating" class="btn btn-primary">
             {{ creating ? t('common.creating') : t('common.create') }}
           </button>
         </div>
@@ -242,7 +242,7 @@
       width="normal"
       @close="closeEditDialog"
     >
-      <form id="edit-promo-form" @submit.prevent="handleUpdate" class="space-y-4">
+      <form v-permission="'promo_codes.update'" id="edit-promo-form" @submit.prevent="handleUpdate" class="space-y-4">
         <div>
           <label class="input-label">{{ t('admin.promo.code') }}</label>
           <input
@@ -306,7 +306,7 @@
           <button type="button" @click="closeEditDialog" class="btn btn-secondary">
             {{ t('common.cancel') }}
           </button>
-          <button type="submit" form="edit-promo-form" :disabled="updating" class="btn btn-primary">
+          <button v-permission="'promo_codes.update'" type="submit" form="edit-promo-form" :disabled="updating" class="btn btn-primary">
             {{ updating ? t('common.saving') : t('common.save') }}
           </button>
         </div>
@@ -372,7 +372,7 @@
     </BaseDialog>
 
     <!-- Delete Confirmation Dialog -->
-    <ConfirmDialog
+    <ConfirmDialog v-if="can('promo_codes.delete')"
       :show="showDeleteDialog"
       :title="t('admin.promo.deleteCode')"
       :message="t('admin.promo.deleteCodeConfirm')"
@@ -386,6 +386,8 @@
 </template>
 
 <script setup lang="ts">
+import { usePermission } from '@/composables/usePermission'
+const { can } = usePermission()
 import { ref, reactive, computed, onMounted, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useAppStore } from '@/stores/app'

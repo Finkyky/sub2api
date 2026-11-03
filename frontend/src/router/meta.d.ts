@@ -19,6 +19,15 @@ declare module 'vue-router' {
      */
     requiresAdmin?: boolean
 
+    /** Required RBAC permission for this route. */
+    requiredPermission?: string
+
+    /** Reserved capabilities, not delegable by a permission code. */
+    superOnly?: boolean
+
+    /** Any one of these RBAC permissions is sufficient. */
+    requiredPermissions?: string[]
+
     /**
      * Page title for this route
      */

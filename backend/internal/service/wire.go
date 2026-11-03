@@ -18,6 +18,21 @@ import (
 	"go.uber.org/zap"
 )
 
+func ProvidePluginInstanceService(repo PluginInstanceRepository, encryptor SecretEncryptor, manager *PluginManager) *PluginInstanceService {
+	instances := NewPluginInstanceService(repo, encryptor, manager, 10*time.Second)
+	interval, budget := 5*time.Second, 30*time.Second
+	if manager != nil && manager.cfg != nil {
+		if manager.cfg.Plugins.InstanceReconcileIntervalSeconds > 0 {
+			interval = time.Duration(manager.cfg.Plugins.InstanceReconcileIntervalSeconds) * time.Second
+		}
+		if manager.cfg.Plugins.InstanceReconcileTimeoutSeconds > 0 {
+			budget = time.Duration(manager.cfg.Plugins.InstanceReconcileTimeoutSeconds) * time.Second
+		}
+	}
+	_ = instances.StartReconciler(context.Background(), interval, budget)
+	return instances
+}
+
 func ProvideGrokOAuthService(proxyRepo ProxyRepository, oauthClient GrokOAuthClient, cfg *config.Config, redisClient *redis.Client) *GrokOAuthService {
 	svc := NewGrokOAuthService(proxyRepo, oauthClient, cfg)
 	// wire.go is depguard-exempt for redis; construct the Redis session store here.
@@ -861,6 +876,9 @@ func ProvideAPIKeyService(
 
 // ProviderSet is the Wire provider set for all services
 var ProviderSet = wire.NewSet(
+	NewResultCacheService,
+	NewRBACService,
+	NewRBACManagementService,
 	// Core services
 	ProvideAuthService,
 	NewPasskeyService,
@@ -969,6 +987,11 @@ var ProviderSet = wire.NewSet(
 	NewErrorPassthroughService,
 	NewTLSFingerprintProfileService,
 	ProvidePluginManager,
+	ProvidePluginInstanceService,
+	NewPluginTaskService,
+	NewPluginTaskCapabilityBroker,
+	wire.Bind(new(PluginTaskBroker), new(*PluginTaskCapabilityBroker)),
+	ProvidePluginTaskScheduler,
 	NewDigestSessionStore,
 	ProvideIdempotencyCoordinator,
 	ProvideSystemOperationLockService,
@@ -1092,4 +1115,12 @@ func ProvideClaudeResetCreditService(accounts AccountRepository, tokens *ClaudeT
 	s := NewClaudeResetCreditService(accounts, tokens, proxies, settings)
 	s.ConfigureRedemption(idem, locks)
 	return s
+}
+
+func ProvidePluginTaskScheduler(tasks *PluginTaskService, cfg *config.Config) *PluginTaskScheduler {
+	scheduler := NewPluginTaskScheduler(tasks)
+	if cfg != nil {
+		scheduler.Start()
+	}
+	return scheduler
 }

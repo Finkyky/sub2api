@@ -60,6 +60,8 @@ type Tx struct {
 	PaymentProviderInstance *PaymentProviderInstanceClient
 	// PendingAuthSession is the client for interacting with the PendingAuthSession builders.
 	PendingAuthSession *PendingAuthSessionClient
+	// Permission is the client for interacting with the Permission builders.
+	Permission *PermissionClient
 	// PromoCode is the client for interacting with the PromoCode builders.
 	PromoCode *PromoCodeClient
 	// PromoCodeUsage is the client for interacting with the PromoCodeUsage builders.
@@ -68,6 +70,10 @@ type Tx struct {
 	Proxy *ProxyClient
 	// RedeemCode is the client for interacting with the RedeemCode builders.
 	RedeemCode *RedeemCodeClient
+	// Role is the client for interacting with the Role builders.
+	Role *RoleClient
+	// RolePermission is the client for interacting with the RolePermission builders.
+	RolePermission *RolePermissionClient
 	// SecuritySecret is the client for interacting with the SecuritySecret builders.
 	SecuritySecret *SecuritySecretClient
 	// Setting is the client for interacting with the Setting builders.
@@ -90,6 +96,8 @@ type Tx struct {
 	UserAttributeValue *UserAttributeValueClient
 	// UserPlatformQuota is the client for interacting with the UserPlatformQuota builders.
 	UserPlatformQuota *UserPlatformQuotaClient
+	// UserRole is the client for interacting with the UserRole builders.
+	UserRole *UserRoleClient
 	// UserSubscription is the client for interacting with the UserSubscription builders.
 	UserSubscription *UserSubscriptionClient
 
@@ -246,10 +254,13 @@ func (tx *Tx) init() {
 	tx.PaymentOrder = NewPaymentOrderClient(tx.config)
 	tx.PaymentProviderInstance = NewPaymentProviderInstanceClient(tx.config)
 	tx.PendingAuthSession = NewPendingAuthSessionClient(tx.config)
+	tx.Permission = NewPermissionClient(tx.config)
 	tx.PromoCode = NewPromoCodeClient(tx.config)
 	tx.PromoCodeUsage = NewPromoCodeUsageClient(tx.config)
 	tx.Proxy = NewProxyClient(tx.config)
 	tx.RedeemCode = NewRedeemCodeClient(tx.config)
+	tx.Role = NewRoleClient(tx.config)
+	tx.RolePermission = NewRolePermissionClient(tx.config)
 	tx.SecuritySecret = NewSecuritySecretClient(tx.config)
 	tx.Setting = NewSettingClient(tx.config)
 	tx.SubscriptionPlan = NewSubscriptionPlanClient(tx.config)
@@ -261,6 +272,7 @@ func (tx *Tx) init() {
 	tx.UserAttributeDefinition = NewUserAttributeDefinitionClient(tx.config)
 	tx.UserAttributeValue = NewUserAttributeValueClient(tx.config)
 	tx.UserPlatformQuota = NewUserPlatformQuotaClient(tx.config)
+	tx.UserRole = NewUserRoleClient(tx.config)
 	tx.UserSubscription = NewUserSubscriptionClient(tx.config)
 }
 

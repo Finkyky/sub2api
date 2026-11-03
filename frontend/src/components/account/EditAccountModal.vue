@@ -5,7 +5,7 @@
     width="wide"
     @close="handleClose"
   >
-    <form
+    <form v-permission="'accounts.update'"
       v-if="account"
       id="edit-account-form"
       @submit.prevent="handleSubmit"
@@ -2253,7 +2253,7 @@
             {{ t('admin.accounts.upstreamBilling.autoProbeHint') }}
           </p>
         </div>
-        <Toggle
+        <Toggle v-if="can('accounts.update')"
           :model-value="upstreamBillingAutoProbeEnabled"
           data-testid="upstream-billing-auto-probe"
           :aria-label="t('admin.accounts.upstreamBilling.autoProbe')"
@@ -2608,6 +2608,29 @@
               ]"
             />
           </button>
+        </div>
+      </div>
+
+      <!-- Codex 292 门票状态（仅 OpenAI OAuth） -->
+      <div
+        v-if="account?.platform === 'openai' && (account?.type === 'oauth' || account?.type === 'setup-token') && codexTurnTickets.length"
+        class="border-t border-gray-200 pt-4 dark:border-dark-600"
+      >
+        <label class="input-label mb-0">{{ t('admin.accounts.openai.codexTurnTicket') }}</label>
+        <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+          {{ t('admin.accounts.openai.codexTurnTicketDesc') }}
+        </p>
+        <div class="mt-3 space-y-1.5">
+          <div v-for="ticket in codexTurnTickets" :key="ticket.model" class="flex items-center justify-between text-sm">
+            <span class="font-medium">{{ ticket.model }}</span>
+            <span v-if="ticket.ready" class="text-emerald-600 dark:text-emerald-400">
+              {{ t('admin.accounts.openai.codexTurnTicketReady', { time: formatCodexTicketRemaining(ticket.remaining_seconds) }) }}
+            </span>
+            <span v-else-if="ticket.blocked" class="text-amber-600 dark:text-amber-400">
+              {{ t('admin.accounts.openai.codexTurnTicketPaused') }}
+            </span>
+            <span v-else class="text-gray-500">{{ t('admin.accounts.openai.codexTurnTicketMissing') }}</span>
+          </div>
         </div>
       </div>
 
@@ -3332,7 +3355,7 @@
         <button @click="handleClose" type="button" class="btn btn-secondary">
           {{ t('common.cancel') }}
         </button>
-        <button
+        <button v-permission="'accounts.update'"
           type="submit"
           form="edit-account-form"
           :disabled="submitting"
@@ -3366,7 +3389,7 @@
   </BaseDialog>
 
   <!-- Mixed Channel Warning Dialog -->
-  <ConfirmDialog
+  <ConfirmDialog v-if="can('accounts.update')"
     :show="showMixedChannelWarning"
     :title="t('admin.accounts.mixedChannelWarningTitle')"
     :message="mixedChannelWarningMessageText"
@@ -3379,6 +3402,8 @@
 </template>
 
 <script setup lang="ts">
+import { usePermission } from '@/composables/usePermission'
+const { can } = usePermission()
 import { ref, reactive, computed, watch, nextTick, onBeforeUnmount, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useAppStore } from '@/stores/app'
@@ -3523,6 +3548,15 @@ const selectableGroups = computed(() => {
 // Spark 影子账号(parent_account_id 非空):代理恒继承母账号,不可独立编辑(外审 B/P1),
 // 故隐藏代理选择器。
 const isSparkShadow = computed(() => props.account?.parent_account_id != null)
+
+const codexTurnTickets = computed(() => props.account?.codex_turn_tickets ?? [])
+
+function formatCodexTicketRemaining(seconds: number) {
+  const total = Math.max(0, Math.floor(seconds || 0))
+  const m = Math.floor(total / 60)
+  const s = total % 60
+  return `${m}m${String(s).padStart(2, '0')}s`
+}
 
 const hideAccountLongContextBilling = computed(() => {
   return allSelectedGroupsEnableLongContextPricing(form.group_ids, props.groups)

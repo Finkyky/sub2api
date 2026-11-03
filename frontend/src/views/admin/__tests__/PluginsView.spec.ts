@@ -121,6 +121,8 @@ function mountView() {
         BaseDialog: { template: '<div><slot /></div>' },
         Icon: true,
         TotpStepUpDialog: true,
+        PluginSectionsNav: true,
+        PluginGroupBindingsPanel: true,
       },
     },
   })

@@ -11,6 +11,7 @@ import (
 
 // ProvideAdminHandlers creates the AdminHandlers struct
 func ProvideAdminHandlers(
+	rbacHandler *admin.RBACHandler,
 	dashboardHandler *admin.DashboardHandler,
 	userHandler *admin.UserHandler,
 	groupHandler *admin.GroupHandler,
@@ -36,6 +37,8 @@ func ProvideAdminHandlers(
 	errorPassthroughHandler *admin.ErrorPassthroughHandler,
 	tlsFingerprintProfileHandler *admin.TLSFingerprintProfileHandler,
 	pluginHandler *admin.PluginHandler,
+	pluginInstanceHandler *admin.PluginInstanceHandler,
+	pluginTaskHandler *admin.PluginTaskHandler,
 	apiKeyHandler *admin.AdminAPIKeyHandler,
 	scheduledTestHandler *admin.ScheduledTestHandler,
 	channelHandler *admin.ChannelHandler,
@@ -51,12 +54,15 @@ func ProvideAdminHandlers(
 	ollamaCloudUsage *service.OllamaCloudUsageService,
 	opencodeGoUsage *service.OpenCodeGoUsageService,
 	claudeResetCredits *service.ClaudeResetCreditService,
+	settingService *service.SettingService,
 ) *AdminHandlers {
 	accountHandler.SetUpstreamBillingProbeService(upstreamBillingProbe)
 	accountHandler.SetOllamaCloudUsageService(ollamaCloudUsage)
 	accountHandler.SetOpenCodeGoUsageService(opencodeGoUsage)
 	accountHandler.SetClaudeResetCreditService(claudeResetCredits)
+	accountHandler.SetCodexTicketSettings(settingService)
 	return &AdminHandlers{
+		RBAC:                   rbacHandler,
 		Dashboard:              dashboardHandler,
 		User:                   userHandler,
 		Group:                  groupHandler,
@@ -82,6 +88,8 @@ func ProvideAdminHandlers(
 		ErrorPassthrough:       errorPassthroughHandler,
 		TLSFingerprintProfile:  tlsFingerprintProfileHandler,
 		Plugin:                 pluginHandler,
+		PluginInstance:         pluginInstanceHandler,
+		PluginTask:             pluginTaskHandler,
 		APIKey:                 apiKeyHandler,
 		ScheduledTest:          scheduledTestHandler,
 		Channel:                channelHandler,
@@ -112,6 +120,7 @@ func ProvideGatewayHandler(
 	userMsgQueueService *service.UserMessageQueueService,
 	cfg *config.Config,
 	settingService *service.SettingService,
+	resultCacheService *service.ResultCacheService,
 	coordinator *securityaudit.Coordinator,
 	geminiCachedContentService *service.GeminiCachedContentService,
 ) *GatewayHandler {
@@ -120,6 +129,7 @@ func ProvideGatewayHandler(
 		errorPassthroughService, contentModerationService, userMsgQueueService, cfg, settingService)
 	h.securityAuditCoordinator = coordinator
 	h.geminiCachedContentService = geminiCachedContentService
+	h.resultCacheService = resultCacheService
 	return h
 }
 
@@ -135,6 +145,7 @@ func ProvideOpenAIGatewayHandler(
 	opsService *service.OpsService,
 	grokQuotaService *service.GrokQuotaService,
 	cfg *config.Config,
+	resultCacheService *service.ResultCacheService,
 	coordinator *securityaudit.Coordinator,
 	compositeResolver *service.CompositeRouteResolver,
 ) *OpenAIGatewayHandler {
@@ -143,6 +154,7 @@ func ProvideOpenAIGatewayHandler(
 		usageRecordWorkerPool, errorPassthroughService, contentModerationService, opsService, cfg)
 	h.compositeResolver = compositeResolver
 	h.securityAuditCoordinator = coordinator
+	h.resultCacheService = resultCacheService
 	h.grokMediaEligibilityProber = grokQuotaService
 	return h
 }
@@ -181,6 +193,7 @@ func ProvideAdminSettingHandler(settingService *service.SettingService, emailSer
 
 // ProvideHandlers creates the Handlers struct
 func ProvideHandlers(
+	pluginGatewayHandler *PluginGatewayHandler,
 	authHandler *AuthHandler,
 	userHandler *UserHandler,
 	mcpOAuthHandler *MCPOAuthHandler,
@@ -208,6 +221,7 @@ func ProvideHandlers(
 	_ *service.OpenAIQuotaAutoResetService,
 ) *Handlers {
 	return &Handlers{
+		PluginGateway:    pluginGatewayHandler,
 		Auth:             authHandler,
 		User:             userHandler,
 		MCPOAuth:         mcpOAuthHandler,
@@ -235,6 +249,7 @@ func ProvideHandlers(
 
 // ProviderSet is the Wire provider set for all handlers
 var ProviderSet = wire.NewSet(
+	NewPluginGatewayHandler,
 	// Top-level handlers
 	NewAuthHandler,
 	NewUserHandler,
@@ -259,6 +274,7 @@ var ProviderSet = wire.NewSet(
 	ProvideBatchImageHandler,
 
 	// Admin handlers
+	admin.NewRBACHandler,
 	admin.NewDashboardHandler,
 	admin.NewUserHandler,
 	admin.NewGroupHandlerWithConfig,
@@ -284,6 +300,8 @@ var ProviderSet = wire.NewSet(
 	admin.NewErrorPassthroughHandler,
 	admin.NewTLSFingerprintProfileHandler,
 	admin.NewPluginHandler,
+	admin.NewPluginInstanceHandler,
+	admin.NewPluginTaskHandler,
 	admin.NewAdminAPIKeyHandler,
 	admin.NewScheduledTestHandler,
 	admin.NewChannelHandler,

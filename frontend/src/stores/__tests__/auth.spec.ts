@@ -41,6 +41,7 @@ const fakeAdminUser = {
   username: 'admin',
   email: 'admin@example.com',
   role: 'admin' as const,
+  permissions: ['dashboard.read'],
 }
 
 const fakeAuthResponse = {

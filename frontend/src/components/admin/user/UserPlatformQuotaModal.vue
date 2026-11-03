@@ -5,7 +5,10 @@
     width="wide"
     @close="$emit('close')"
   >
-    <div v-if="user" class="space-y-4">
+    <p v-if="!auth.hasPermission('users.read')" role="status">{{ rt('rbac.noPermission') }}</p>
+    <p v-else-if="!canWrite" role="status">{{ rt('rbac.readOnly') }}</p>
+    <div v-if="loadError" role="alert" class="text-sm text-red-600">{{ rt('rbac.loadFailed') }} <button class="btn btn-secondary" @click="load">{{ rt('rbac.retry') }}</button></div>
+    <div v-if="user && auth.hasPermission('users.read')" class="space-y-4">
       <div
         v-if="hasActiveSubscription"
         class="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-200"
@@ -37,13 +40,14 @@
                     type="number"
                     min="0"
                     step="0.01"
+                    :disabled="!canWrite || !loaded || submitting"
                     class="input w-24"
                     :placeholder="t('admin.users.platformQuota.placeholder')"
                   />
                   <button
                     type="button"
                     class="text-xs text-gray-400 hover:text-amber-500 disabled:opacity-50"
-                    :disabled="!!resetting[`${row.platform}.daily`] || !savedConfigured.has(row.platform)"
+                    :disabled="!canWrite || !loaded || submitting || !!resetting[`${row.platform}.daily`] || !savedConfigured.has(row.platform)"
                     :title="t(savedConfigured.has(row.platform) ? 'admin.users.platformQuota.reset.button' : 'admin.users.platformQuota.reset.unavailable')"
                     @click="onReset(row.platform, 'daily')"
                   >↻</button>
@@ -56,13 +60,14 @@
                     type="number"
                     min="0"
                     step="0.01"
+                    :disabled="!canWrite || !loaded || submitting"
                     class="input w-24"
                     :placeholder="t('admin.users.platformQuota.placeholder')"
                   />
                   <button
                     type="button"
                     class="text-xs text-gray-400 hover:text-amber-500 disabled:opacity-50"
-                    :disabled="!!resetting[`${row.platform}.weekly`] || !savedConfigured.has(row.platform)"
+                    :disabled="!canWrite || !loaded || submitting || !!resetting[`${row.platform}.weekly`] || !savedConfigured.has(row.platform)"
                     :title="t(savedConfigured.has(row.platform) ? 'admin.users.platformQuota.reset.button' : 'admin.users.platformQuota.reset.unavailable')"
                     @click="onReset(row.platform, 'weekly')"
                   >↻</button>
@@ -75,13 +80,14 @@
                     type="number"
                     min="0"
                     step="0.01"
+                    :disabled="!canWrite || !loaded || submitting"
                     class="input w-24"
                     :placeholder="t('admin.users.platformQuota.placeholder')"
                   />
                   <button
                     type="button"
                     class="text-xs text-gray-400 hover:text-amber-500 disabled:opacity-50"
-                    :disabled="!!resetting[`${row.platform}.monthly`] || !savedConfigured.has(row.platform)"
+                    :disabled="!canWrite || !loaded || submitting || !!resetting[`${row.platform}.monthly`] || !savedConfigured.has(row.platform)"
                     :title="t(savedConfigured.has(row.platform) ? 'admin.users.platformQuota.reset.button' : 'admin.users.platformQuota.reset.unavailable')"
                     @click="onReset(row.platform, 'monthly')"
                   >↻</button>
@@ -95,7 +101,7 @@
         </table>
         <p class="mt-3 text-xs text-gray-500">{{ t('admin.users.platformQuota.hint') }}</p>
         <div class="mt-3">
-          <button type="button" class="btn btn-secondary text-sm" @click="onClearAll">
+          <button type="button" class="btn btn-secondary text-sm" :disabled="!canWrite || !loaded || submitting" @click="onClearAll">
             {{ t('admin.users.platformQuota.clearAll') }}
           </button>
         </div>
@@ -106,7 +112,7 @@
         <button type="button" class="btn btn-secondary" @click="$emit('close')">
           {{ t('admin.users.platformQuota.cancel') }}
         </button>
-        <button type="button" class="btn btn-primary" :disabled="submitting || loading" @click="onSave">
+        <button type="button" class="btn btn-primary" :disabled="submitting || loading || !canWrite || !loaded" @click="onSave">
           {{ submitting ? t('admin.users.platformQuota.saving') : t('admin.users.platformQuota.save') }}
         </button>
       </div>
@@ -115,7 +121,9 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, watch, computed } from 'vue'
+import { useAuthStore } from '@/stores/auth'
+import { rbacMessages } from '@/components/admin/rbac/messages'
+import { ref, reactive, watch, computed, onBeforeUnmount } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useAppStore } from '@/stores/app'
 import { adminAPI } from '@/api/admin'
@@ -123,10 +131,13 @@ import { platformQuotaPlatforms } from '@/api/admin/users'
 import type { AdminUser, PlatformQuotaItem, PlatformQuotaPlatform, PlatformQuotaWindow } from '@/types'
 import BaseDialog from '@/components/common/BaseDialog.vue'
 
+const auth = useAuthStore()
+
 const props = defineProps<{ show: boolean; user: AdminUser | null }>()
 const emit = defineEmits(['close', 'success'])
 
 const { t } = useI18n()
+const { t: rt } = useI18n({ useScope: 'local', messages: rbacMessages })
 const appStore = useAppStore()
 
 interface QuotaRow {
@@ -143,6 +154,9 @@ const hasActiveSubscription = computed(() =>
   props.user?.subscriptions?.some((s) => s.status === 'active') ?? false
 )
 
+const loaded = ref(false), loadError = ref(false)
+const canWrite = computed(() => auth.hasPermission('users.read') && auth.hasPermission('users.update'))
+let generation = 0
 const loading = ref(false)
 const submitting = ref(false)
 const resetting = reactive<Record<string, boolean>>({})
@@ -196,27 +210,34 @@ function formatUsage(n: number): string {
 }
 
 async function load() {
-  if (!props.user) return
+  const seq = ++generation
+  loaded.value = false; loading.value = false; loadError.value = false
+  if (!props.show || !props.user || !auth.hasPermission('users.read')) { quotas.value = []; return }
   loading.value = true
   try {
     const data = await adminAPI.users.getPlatformQuotas(props.user.id)
+    if (seq !== generation) return
+    loaded.value = true
     quotas.value = normalize(data.platform_quotas || [])
     savedConfigured.value = configuredPlatforms(data.platform_quotas || [])
   } catch {
+    if (seq !== generation) return
+    loadError.value = true
     appStore.showError(t('admin.users.platformQuota.loadFailed'))
     quotas.value = platformQuotaPlatforms().map(emptyRow)
     savedConfigured.value = new Set()
   } finally {
-    loading.value = false
+    if (seq === generation) loading.value = false
   }
 }
 
 watch(
-  () => props.show,
-  (s) => { if (s && props.user) load() },
+  () => [props.show, props.user?.id, auth.hasPermission('users.read')], load, { immediate: true }
 )
+onBeforeUnmount(() => { generation++ })
 
 function onClearAll() {
+  if (!canWrite.value || !loaded.value || submitting.value) return
   // 二次确认：一键清空全部平台的 daily/weekly/monthly 限额属于高风险批量操作，
   // 误点后所有平台变为"无限额"，且本地无 undo 机制（需要逐个手动重填或取消保存）。
   const confirmed = window.confirm(t('admin.users.platformQuota.clearAllConfirm'))
@@ -229,7 +250,7 @@ function onClearAll() {
 }
 
 async function onSave() {
-  if (!props.user) return
+  if (!props.user || !canWrite.value || !loaded.value || submitting.value) return
   // 拒绝非法数值，避免 normalizeLimit 将其静默转换为 null（无限额）。
   const invalid: string[] = []
   for (const row of quotas.value) {
@@ -273,7 +294,7 @@ function normalizeLimit(v: number | null | undefined): number | null {
 }
 
 async function onReset(platform: PlatformQuotaPlatform, quotaWindow: PlatformQuotaWindow) {
-  if (!props.user) return
+  if (!props.user || !canWrite.value || !loaded.value || submitting.value || resetting[`${platform}.${quotaWindow}`]) return
   const windowLabel = t(`admin.users.platformQuota.window${quotaWindow.charAt(0).toUpperCase() + quotaWindow.slice(1)}`)
   const confirmed = window.confirm(
     t('admin.users.platformQuota.reset.confirm', { platform, window: windowLabel })

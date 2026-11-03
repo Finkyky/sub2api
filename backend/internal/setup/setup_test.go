@@ -596,12 +596,17 @@ func TestBootstrapAdminUserCreatesAdminWithGeneratedCredentials(t *testing.T) {
 	}
 	defer func() { _ = db.Close() }()
 	expectAdminBootstrapCounts(mock, 0, 0)
-	mock.ExpectExec(regexp.QuoteMeta("INSERT INTO users")).
+	mock.ExpectBegin()
+	mock.ExpectQuery(regexp.QuoteMeta("INSERT INTO users")).
 		WithArgs(
 			sqlmock.AnyArg(), sqlmock.AnyArg(), service.RoleAdmin, sqlmock.AnyArg(),
 			sqlmock.AnyArg(), service.StatusActive, sqlmock.AnyArg(), sqlmock.AnyArg(),
 		).
+		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(int64(1)))
+	mock.ExpectExec(regexp.QuoteMeta("INSERT INTO user_roles")).
+		WithArgs(int64(1)).
 		WillReturnResult(sqlmock.NewResult(1, 1))
+	mock.ExpectCommit()
 
 	cfg := &SetupConfig{}
 	created, reason, err := bootstrapAdminUser(context.Background(), db, cfg)

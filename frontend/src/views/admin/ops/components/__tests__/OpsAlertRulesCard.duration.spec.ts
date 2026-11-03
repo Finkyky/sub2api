@@ -1,3 +1,4 @@
+import '@/permissions/__tests__/authorizedFixture'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { enableAutoUnmount, flushPromises, shallowMount } from '@vue/test-utils'
 

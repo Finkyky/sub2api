@@ -1,0 +1,59 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "business-output config v1",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "config_version": {
+      "type": "integer",
+      "const": 1,
+      "default": 1
+    },
+    "threshold": {
+      "type": "number",
+      "exclusiveMinimum": 0,
+      "maximum": 1000000
+    },
+    "rules": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 32,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "version",
+          "keywords",
+          "weight"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9_.-]{0,63}$"
+          },
+          "version": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9_.-]{0,63}$"
+          },
+          "keywords": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 32,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            }
+          },
+          "weight": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "maximum": 1000000
+          }
+        }
+      }
+    }
+  }
+}

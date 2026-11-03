@@ -197,6 +197,7 @@ type AdminGroup struct {
 	ModelAllowlist              service.GroupModelAllowlist              `json:"model_allowlist"`
 	// 固定账号获取 Codex Model Manifest 配置（仅 openai 平台使用）。
 	CodexModelsManifestConfig domain.GroupCodexModelsManifestConfig `json:"codex_models_manifest_config"`
+	ResponseResultCacheConfig domain.GroupResponseResultCacheConfig `json:"response_result_cache_config"`
 
 	// 支持的模型系列（仅 antigravity 平台使用）
 	SupportedModelScopes    []string       `json:"supported_model_scopes"`
@@ -236,6 +237,7 @@ type Account struct {
 	AutoPauseOnExpired      bool                           `json:"auto_pause_on_expired"`
 	CreatedAt               time.Time                      `json:"created_at"`
 	UpdatedAt               time.Time                      `json:"updated_at"`
+	CodexTurnTickets        []service.OpenAICodexTicketStatus `json:"codex_turn_tickets,omitempty"`
 
 	Schedulable bool `json:"schedulable"`
 
@@ -350,6 +352,7 @@ type AccountListItem struct {
 	Extra             map[string]any                 `json:"extra,omitempty"`
 	OllamaCloudUsage  *service.OllamaCloudUsageState `json:"ollama_cloud_usage,omitempty"`
 	OpenCodeGoUsage   *service.OpenCodeGoUsageState  `json:"opencode_go_usage,omitempty"`
+	CodexTurnTickets  []service.OpenAICodexTicketStatus `json:"codex_turn_tickets,omitempty"`
 
 	ProxyID                 *int64     `json:"proxy_id"`
 	ProxyFallbackOriginID   *int64     `json:"proxy_fallback_origin_id"`

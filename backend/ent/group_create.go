@@ -822,6 +822,20 @@ func (_c *GroupCreate) SetNillableModelAllowlist(v *domain.GroupModelAllowlist) 
 	return _c
 }
 
+// SetResponseResultCacheConfig sets the "response_result_cache_config" field.
+func (_c *GroupCreate) SetResponseResultCacheConfig(v domain.GroupResponseResultCacheConfig) *GroupCreate {
+	_c.mutation.SetResponseResultCacheConfig(v)
+	return _c
+}
+
+// SetNillableResponseResultCacheConfig sets the "response_result_cache_config" field if the given value is not nil.
+func (_c *GroupCreate) SetNillableResponseResultCacheConfig(v *domain.GroupResponseResultCacheConfig) *GroupCreate {
+	if v != nil {
+		_c.SetResponseResultCacheConfig(*v)
+	}
+	return _c
+}
+
 // SetCodexModelsManifestConfig sets the "codex_models_manifest_config" field.
 func (_c *GroupCreate) SetCodexModelsManifestConfig(v domain.GroupCodexModelsManifestConfig) *GroupCreate {
 	_c.mutation.SetCodexModelsManifestConfig(v)
@@ -1207,6 +1221,13 @@ func (_c *GroupCreate) defaults() error {
 		v := group.DefaultModelAllowlist
 		_c.mutation.SetModelAllowlist(v)
 	}
+	if _, ok := _c.mutation.ResponseResultCacheConfig(); !ok {
+		if group.DefaultResponseResultCacheConfig == nil {
+			return fmt.Errorf("ent: uninitialized group.DefaultResponseResultCacheConfig (forgotten import ent/runtime?)")
+		}
+		v := group.DefaultResponseResultCacheConfig()
+		_c.mutation.SetResponseResultCacheConfig(v)
+	}
 	if _, ok := _c.mutation.CodexModelsManifestConfig(); !ok {
 		v := group.DefaultCodexModelsManifestConfig
 		_c.mutation.SetCodexModelsManifestConfig(v)
@@ -1417,6 +1438,9 @@ func (_c *GroupCreate) check() error {
 	}
 	if _, ok := _c.mutation.ModelAllowlist(); !ok {
 		return &ValidationError{Name: "model_allowlist", err: errors.New(`ent: missing required field "Group.model_allowlist"`)}
+	}
+	if _, ok := _c.mutation.ResponseResultCacheConfig(); !ok {
+		return &ValidationError{Name: "response_result_cache_config", err: errors.New(`ent: missing required field "Group.response_result_cache_config"`)}
 	}
 	if _, ok := _c.mutation.CodexModelsManifestConfig(); !ok {
 		return &ValidationError{Name: "codex_models_manifest_config", err: errors.New(`ent: missing required field "Group.codex_models_manifest_config"`)}
@@ -1718,6 +1742,10 @@ func (_c *GroupCreate) createSpec() (*Group, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.ModelAllowlist(); ok {
 		_spec.SetField(group.FieldModelAllowlist, field.TypeJSON, value)
 		_node.ModelAllowlist = value
+	}
+	if value, ok := _c.mutation.ResponseResultCacheConfig(); ok {
+		_spec.SetField(group.FieldResponseResultCacheConfig, field.TypeJSON, value)
+		_node.ResponseResultCacheConfig = value
 	}
 	if value, ok := _c.mutation.CodexModelsManifestConfig(); ok {
 		_spec.SetField(group.FieldCodexModelsManifestConfig, field.TypeJSON, value)
@@ -2870,6 +2898,18 @@ func (u *GroupUpsert) SetModelAllowlist(v domain.GroupModelAllowlist) *GroupUpse
 // UpdateModelAllowlist sets the "model_allowlist" field to the value that was provided on create.
 func (u *GroupUpsert) UpdateModelAllowlist() *GroupUpsert {
 	u.SetExcluded(group.FieldModelAllowlist)
+	return u
+}
+
+// SetResponseResultCacheConfig sets the "response_result_cache_config" field.
+func (u *GroupUpsert) SetResponseResultCacheConfig(v domain.GroupResponseResultCacheConfig) *GroupUpsert {
+	u.Set(group.FieldResponseResultCacheConfig, v)
+	return u
+}
+
+// UpdateResponseResultCacheConfig sets the "response_result_cache_config" field to the value that was provided on create.
+func (u *GroupUpsert) UpdateResponseResultCacheConfig() *GroupUpsert {
+	u.SetExcluded(group.FieldResponseResultCacheConfig)
 	return u
 }
 
@@ -4159,6 +4199,20 @@ func (u *GroupUpsertOne) SetModelAllowlist(v domain.GroupModelAllowlist) *GroupU
 func (u *GroupUpsertOne) UpdateModelAllowlist() *GroupUpsertOne {
 	return u.Update(func(s *GroupUpsert) {
 		s.UpdateModelAllowlist()
+	})
+}
+
+// SetResponseResultCacheConfig sets the "response_result_cache_config" field.
+func (u *GroupUpsertOne) SetResponseResultCacheConfig(v domain.GroupResponseResultCacheConfig) *GroupUpsertOne {
+	return u.Update(func(s *GroupUpsert) {
+		s.SetResponseResultCacheConfig(v)
+	})
+}
+
+// UpdateResponseResultCacheConfig sets the "response_result_cache_config" field to the value that was provided on create.
+func (u *GroupUpsertOne) UpdateResponseResultCacheConfig() *GroupUpsertOne {
+	return u.Update(func(s *GroupUpsert) {
+		s.UpdateResponseResultCacheConfig()
 	})
 }
 
@@ -5633,6 +5687,20 @@ func (u *GroupUpsertBulk) SetModelAllowlist(v domain.GroupModelAllowlist) *Group
 func (u *GroupUpsertBulk) UpdateModelAllowlist() *GroupUpsertBulk {
 	return u.Update(func(s *GroupUpsert) {
 		s.UpdateModelAllowlist()
+	})
+}
+
+// SetResponseResultCacheConfig sets the "response_result_cache_config" field.
+func (u *GroupUpsertBulk) SetResponseResultCacheConfig(v domain.GroupResponseResultCacheConfig) *GroupUpsertBulk {
+	return u.Update(func(s *GroupUpsert) {
+		s.SetResponseResultCacheConfig(v)
+	})
+}
+
+// UpdateResponseResultCacheConfig sets the "response_result_cache_config" field to the value that was provided on create.
+func (u *GroupUpsertBulk) UpdateResponseResultCacheConfig() *GroupUpsertBulk {
+	return u.Update(func(s *GroupUpsert) {
+		s.UpdateResponseResultCacheConfig()
 	})
 }
 

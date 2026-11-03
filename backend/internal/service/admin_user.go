@@ -117,7 +117,7 @@ func normalizeUserRole(role, fallback string) (string, error) {
 	return role, nil
 }
 
-func (s *adminServiceImpl) CreateUser(ctx context.Context, input *CreateUserInput) (*User, error) {
+func (s *adminServiceImpl) createUserAuthorized(ctx context.Context, input *CreateUserInput) (*User, error) {
 	balance := 0.0
 	if input.Balance != nil {
 		balance = *input.Balance
@@ -155,7 +155,9 @@ func (s *adminServiceImpl) CreateUser(ctx context.Context, input *CreateUserInpu
 		logger.LegacyPrintf("service.admin", "audit: admin user created actor_admin_id=%d target_user_id=%d",
 			input.ActorAdminID, user.ID)
 	}
-	s.assignDefaultSubscriptions(ctx, user.ID)
+	if _, scoped := RBACActorFromContext(ctx); !scoped {
+		s.assignDefaultSubscriptions(ctx, user.ID)
+	}
 	return user, nil
 }
 
@@ -194,7 +196,7 @@ func (s *adminServiceImpl) assignDefaultSubscriptions(ctx context.Context, userI
 	}
 }
 
-func (s *adminServiceImpl) UpdateUser(ctx context.Context, id int64, input *UpdateUserInput) (*User, error) {
+func (s *adminServiceImpl) updateUserAuthorized(ctx context.Context, id int64, input *UpdateUserInput) (*User, error) {
 	// 校验用户专属分组倍率：必须 > 0（nil 合法，表示清除专属倍率）
 	if input.GroupRates != nil {
 		for groupID, rate := range input.GroupRates {
@@ -356,7 +358,7 @@ func sameInt64Set(a, b []int64) bool {
 	return true
 }
 
-func (s *adminServiceImpl) DeleteUser(ctx context.Context, id int64) error {
+func (s *adminServiceImpl) deleteUserAuthorized(ctx context.Context, id int64) error {
 	// Protect admin users: cannot delete admin accounts
 	user, err := s.userRepo.GetByID(ctx, id)
 	if err != nil {
@@ -371,7 +373,7 @@ func (s *adminServiceImpl) DeleteUser(ctx context.Context, id int64) error {
 		return err
 	}
 
-	if s.entClient != nil {
+	if s.entClient != nil && dbent.TxFromContext(ctx) == nil {
 		tx, err := s.entClient.Tx(ctx)
 		if err != nil {
 			return err
@@ -392,12 +394,16 @@ func (s *adminServiceImpl) DeleteUser(ctx context.Context, id int64) error {
 	}
 
 	if s.authCacheInvalidator != nil {
-		for _, key := range apiKeys {
-			if keyValue := strings.TrimSpace(key.Key); keyValue != "" {
-				s.authCacheInvalidator.InvalidateAuthCacheByKey(ctx, keyValue)
+		// Capture raw keys before deletion. Looking them up after commit loses them,
+		// while invalidating before commit can refill the cache with pre-delete state.
+		afterAdminUserCommit(ctx, func(committedCtx context.Context) {
+			for _, key := range apiKeys {
+				if keyValue := strings.TrimSpace(key.Key); keyValue != "" {
+					s.authCacheInvalidator.InvalidateAuthCacheByKey(committedCtx, keyValue)
+				}
 			}
-		}
-		s.authCacheInvalidator.InvalidateAuthCacheByUserID(ctx, id)
+			s.authCacheInvalidator.InvalidateAuthCacheByUserID(committedCtx, id)
+		})
 	}
 	return nil
 }
@@ -908,7 +914,7 @@ func redeemCodeHistoryTime(code RedeemCode) time.Time {
 	return code.CreatedAt
 }
 
-func (s *adminServiceImpl) BindUserAuthIdentity(ctx context.Context, userID int64, input AdminBindAuthIdentityInput) (*AdminBoundAuthIdentity, error) {
+func (s *adminServiceImpl) bindUserAuthIdentityAuthorized(ctx context.Context, userID int64, input AdminBindAuthIdentityInput) (*AdminBoundAuthIdentity, error) {
 	if userID <= 0 {
 		return nil, infraerrors.BadRequest("INVALID_INPUT", "user_id must be greater than 0")
 	}
@@ -945,11 +951,16 @@ func (s *adminServiceImpl) BindUserAuthIdentity(ctx context.Context, userID int6
 	}
 
 	verifiedAt := time.Now().UTC()
-	tx, err := s.entClient.Tx(ctx)
-	if err != nil {
-		return nil, infraerrors.InternalServer("ADMIN_AUTH_IDENTITY_BIND_TX_FAILED", "failed to start auth identity bind transaction").WithCause(err)
+	tx := dbent.TxFromContext(ctx)
+	ownsTx := tx == nil
+	if ownsTx {
+		var err error
+		tx, err = s.entClient.Tx(ctx)
+		if err != nil {
+			return nil, infraerrors.InternalServer("ADMIN_AUTH_IDENTITY_BIND_TX_FAILED", "failed to start auth identity bind transaction").WithCause(err)
+		}
+		defer func() { _ = tx.Rollback() }()
 	}
-	defer func() { _ = tx.Rollback() }()
 
 	identityRecords, err := tx.AuthIdentity.Query().
 		Where(
@@ -1047,8 +1058,10 @@ func (s *adminServiceImpl) BindUserAuthIdentity(ctx context.Context, userID int6
 		}
 	}
 
-	if err := tx.Commit(); err != nil {
-		return nil, infraerrors.InternalServer("ADMIN_AUTH_IDENTITY_BIND_COMMIT_FAILED", "failed to commit auth identity bind").WithCause(err)
+	if ownsTx {
+		if err := tx.Commit(); err != nil {
+			return nil, infraerrors.InternalServer("ADMIN_AUTH_IDENTITY_BIND_COMMIT_FAILED", "failed to commit auth identity bind").WithCause(err)
+		}
 	}
 	return buildAdminBoundAuthIdentity(identity, channel), nil
 }

@@ -6,7 +6,7 @@
     close-on-click-outside
     @close="handleClose"
   >
-    <form id="import-proxy-data-form" class="space-y-4" @submit.prevent="handleImport">
+    <form v-permission="'proxies.import'" id="import-proxy-data-form" class="space-y-4" @submit.prevent="handleImport">
       <div class="text-sm text-gray-600 dark:text-dark-300">
         {{ t('admin.proxies.dataImportHint') }}
       </div>
@@ -71,7 +71,7 @@
         <button class="btn btn-secondary" type="button" :disabled="importing" @click="handleClose">
           {{ t('common.cancel') }}
         </button>
-        <button
+        <button v-permission="'proxies.import'"
           class="btn btn-primary"
           type="submit"
           form="import-proxy-data-form"

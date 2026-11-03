@@ -1030,6 +1030,8 @@ func TestOpenAIGatewayService_Forward_WSv2_OAuthHonorsAccountUserAgent(t *testin
 		captureDialer.lastHeaders.Get("user-agent"),
 	)
 	require.Equal(t, codexCLIVersion, captureDialer.lastHeaders.Get("version"))
+	require.Equal(t, "responses_websockets=2026-02-06", captureDialer.lastHeaders.Get("OpenAI-Beta"),
+		"Codex 0.166 Responses WebSocket handshake uses the 2026-02-06 beta value")
 }
 
 func TestOpenAIGatewayService_Forward_WSv2_HeaderSessionFallbackFromPromptCacheKey(t *testing.T) {

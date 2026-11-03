@@ -600,13 +600,13 @@ const empty = computed(() => events.value.length === 0 && !loading.value)
                   class="w-[110px]"
                   @change="silenceDuration = String($event || '1h')"
                 />
-                <button type="button" class="btn btn-secondary btn-sm" :disabled="detailActionLoading" @click="silenceAlert">
+                <button v-permission="'ops.manage'" type="button" class="btn btn-secondary btn-sm" :disabled="detailActionLoading" @click="silenceAlert">
                   <Icon name="ban" size="sm" />
                   {{ t('common.apply') }}
                 </button>
               </div>
 
-              <button type="button" class="btn btn-secondary btn-sm" :disabled="detailActionLoading" @click="manualResolve">
+              <button v-permission="'ops.manage'" type="button" class="btn btn-secondary btn-sm" :disabled="detailActionLoading" @click="manualResolve">
                 <Icon name="checkCircle" size="sm" />
                 {{ t('admin.ops.alertEvents.detail.manualResolve') }}
               </button>

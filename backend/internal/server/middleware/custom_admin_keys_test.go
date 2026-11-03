@@ -46,7 +46,7 @@ func TestScopedAdminKeyAuthDefaultDenyAndCreatorStatus(t *testing.T) {
 		return &service.User{ID: 9, Role: service.RoleAdmin, Status: status}, nil
 	}}, nil, nil, nil)
 	r := gin.New()
-	r.Use(gin.HandlerFunc(NewAdminAuthMiddleware(nil, users, settings, nil)))
+	r.Use(gin.HandlerFunc(NewAdminAuthMiddleware(nil, users, settings, nil, nil)))
 	for _, path := range []string{"/api/v1/admin/users", "/api/v1/admin/unknown", "/api/v1/admin/settings/admin-api-keys"} {
 		r.GET(path, func(c *gin.Context) { c.Status(204) })
 	}
@@ -69,7 +69,7 @@ func TestScopedAdminKeyAuthDefaultDenyAndCreatorStatus(t *testing.T) {
 }
 func TestLegacyAdminKeyCannotManageKeys(t *testing.T) {
 	r := gin.New()
-	r.Use(gin.HandlerFunc(NewAdminAuthMiddleware(nil, nil, nil, nil)))
+	r.Use(gin.HandlerFunc(NewAdminAuthMiddleware(nil, nil, nil, nil, nil)))
 	r.POST("/api/v1/admin/settings/admin-api-key/regenerate", func(c *gin.Context) { t.Fatal("不应执行 handler") })
 	req := httptest.NewRequest("POST", "/api/v1/admin/settings/admin-api-key/regenerate", nil)
 	req.Header.Set("x-api-key", "admin-legacy")
@@ -107,7 +107,7 @@ func TestScopedAdminKeyAuditDenialOmitsSecrets(t *testing.T) {
 
 func TestScopedAdminKeyMissingDependenciesFailClosed(t *testing.T) {
 	r := gin.New()
-	r.Use(gin.HandlerFunc(NewAdminAuthMiddleware(nil, nil, nil, nil)))
+	r.Use(gin.HandlerFunc(NewAdminAuthMiddleware(nil, nil, nil, nil, nil)))
 	r.GET("/api/v1/admin/users", func(c *gin.Context) { t.Fatal("不应执行") })
 	req := httptest.NewRequest("GET", "/api/v1/admin/users", nil)
 	req.Header.Set("x-api-key", "adm_sc_invalid")
@@ -126,7 +126,7 @@ func TestAdminFullAccessKeepsIdentityAndJWTBoundary(t *testing.T) {
 		return &service.User{ID: 9, Role: service.RoleAdmin, Status: service.StatusActive}, nil
 	}}, nil, nil, nil)
 	r := gin.New()
-	r.Use(gin.HandlerFunc(NewAdminAuthMiddleware(nil, users, settings, nil)))
+	r.Use(gin.HandlerFunc(NewAdminAuthMiddleware(nil, users, settings, nil, nil)))
 	r.GET("/api/v1/admin/future", func(c *gin.Context) {
 		require.NotNil(t, adminaccess.FromContext(c.Request.Context()))
 		require.Nil(t, adminaccess.RestrictedFromContext(c.Request.Context()))

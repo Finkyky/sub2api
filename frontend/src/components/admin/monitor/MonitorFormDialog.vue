@@ -5,7 +5,7 @@
     width="wide"
     @close="$emit('close')"
   >
-    <form id="channel-monitor-form" @submit.prevent="handleSubmit" class="space-y-5">
+    <form v-permission="editing ? 'channels.update' : 'channels.create'" id="channel-monitor-form" @submit.prevent="handleSubmit" class="space-y-5">
       <div>
         <label class="input-label">{{ t('admin.channelMonitor.form.name') }} <span class="text-red-500">*</span></label>
         <input v-model="form.name" type="text" required class="input" :placeholder="t('admin.channelMonitor.form.namePlaceholder')" />
@@ -207,7 +207,7 @@
         <button @click="$emit('close')" type="button" class="btn btn-secondary">
           {{ t('common.cancel') }}
         </button>
-        <button
+        <button v-permission="editing ? 'channels.update' : 'channels.create'"
           type="submit"
           form="channel-monitor-form"
           :disabled="submitting"

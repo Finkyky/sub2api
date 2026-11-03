@@ -39,7 +39,7 @@
     </div>
 
     <!-- Step 1: Basic Info -->
-    <form
+    <form v-permission="'accounts.create'"
       v-if="step === 1"
       id="create-account-form"
       @submit.prevent="handleSubmit"
@@ -3804,7 +3804,7 @@
         <button @click="handleClose" type="button" class="btn btn-secondary">
           {{ t('common.cancel') }}
         </button>
-        <button
+        <button v-permission="'accounts.create'"
           type="submit"
           form="create-account-form"
           :disabled="submitting"
@@ -3844,7 +3844,7 @@
         <button type="button" class="btn btn-secondary" @click="goBackToBasicInfo">
           {{ t('common.back') }}
         </button>
-        <button
+        <button v-permission="'accounts.create'"
           v-if="isManualInputMethod"
           type="button"
           :disabled="!canExchangeCode"
@@ -4099,7 +4099,7 @@
   </BaseDialog>
 
   <!-- Mixed Channel Warning Dialog -->
-  <ConfirmDialog
+  <ConfirmDialog v-if="can('accounts.create')"
     :show="showMixedChannelWarning"
     :title="t('admin.accounts.mixedChannelWarningTitle')"
     :message="mixedChannelWarningMessageText"
@@ -4112,6 +4112,8 @@
 </template>
 
 <script setup lang="ts">
+import { usePermission } from '@/composables/usePermission'
+const { can } = usePermission()
 import { ref, reactive, computed, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useAppStore } from '@/stores/app'

@@ -93,7 +93,7 @@
                 </button>
               </div>
             </div>
-            <button
+            <button v-permission="'groups.update'"
               v-if="!authStore.isSimpleMode"
               @click="openSortModal"
               class="btn btn-secondary"
@@ -102,7 +102,7 @@
               <Icon name="arrowsUpDown" size="md" class="mr-2" />
               {{ t("admin.groups.sortOrder") }}
             </button>
-            <button
+            <button v-permission="'groups.create'"
               @click="openCreateModal"
               class="btn btn-primary"
               data-tour="groups-create-btn"
@@ -381,14 +381,15 @@
 
           <template #cell-actions="{ row }">
             <div class="flex items-center gap-1">
-              <button
+              <button v-if="can('groups.read') && can('plugin_instances.read')" data-testid="group-plugin-chain" class="btn btn-secondary btn-sm" @click="pluginChainGroup = row">{{ t('admin.pluginBindings.chainAction') }}</button>
+              <button v-permission="'groups.update'"
                 @click="handleEdit(row)"
                 class="flex flex-col items-center gap-0.5 rounded-lg p-1.5 text-gray-500 transition-colors hover:bg-gray-100 hover:text-primary-600 dark:hover:bg-dark-700 dark:hover:text-primary-400"
               >
                 <Icon name="edit" size="sm" />
                 <span class="text-xs">{{ t("common.edit") }}</span>
               </button>
-              <button
+              <button v-permission="'groups.create'"
                 v-if="!authStore.isSimpleMode"
                 data-testid="group-duplicate"
                 :title="
@@ -409,7 +410,7 @@
                   }}
                 </span>
               </button>
-              <button
+              <button v-permission="'groups.update'"
                 v-if="!authStore.isSimpleMode && row.platform === 'composite'"
                 data-testid="group-composite-routes"
                 @click="handleCompositeRoutes(row)"
@@ -420,7 +421,7 @@
                   t("admin.groups.compositeRoutes.action")
                 }}</span>
               </button>
-              <button
+              <button v-permission="'groups.update'"
                 v-if="!authStore.isSimpleMode"
                 data-testid="group-rate-multipliers"
                 @click="handleRateMultipliers(row)"
@@ -431,7 +432,7 @@
                   t("admin.groups.rateMultipliers")
                 }}</span>
               </button>
-              <button
+              <button v-permission="'groups.update'"
                 v-if="!authStore.isSimpleMode"
                 data-testid="group-rpm-overrides"
                 @click="handleRPMOverrides(row)"
@@ -442,7 +443,7 @@
                   t("admin.groups.rpmOverrides")
                 }}</span>
               </button>
-              <button
+              <button v-permission="'groups.delete'"
                 @click="handleDelete(row)"
                 class="flex flex-col items-center gap-0.5 rounded-lg p-1.5 text-gray-500 transition-colors hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-900/20 dark:hover:text-red-400"
               >
@@ -453,7 +454,7 @@
           </template>
 
           <template #empty>
-            <EmptyState
+            <EmptyState v-if="can('groups.create')"
               :title="t('admin.groups.noGroupsYet')"
               :description="t('admin.groups.createFirstGroup')"
               :action-text="t('admin.groups.createGroup')"
@@ -482,7 +483,7 @@
       width="wide"
       @close="closeCreateModal"
     >
-      <form
+      <form v-permission="'groups.create'"
         id="create-group-form"
         @submit.prevent="handleCreateGroup"
         class="space-y-5"
@@ -638,6 +639,7 @@
           />
           <p class="input-hint">{{ t("admin.groups.form.rpmLimitHint") }}</p>
         </div>
+        <ResponseResultCacheField v-model="createResultCacheConfig" :disabled="!can('groups.create')" />
         <ReasoningEffortPolicyFields
           v-if="supportsReasoningEffortPolicyPlatform(createForm.platform)"
           ref="createReasoningEffortPolicyRef"
@@ -864,14 +866,14 @@
             </div>
             <div class="border-t border-gray-200 px-3 py-2 dark:border-dark-600">
               <div class="flex items-center gap-2">
-                <input
+                <input v-permission="'groups.update'"
                   v-model="createAllowlistCustomEntry"
                   type="text"
                   :placeholder="t('admin.groups.modelAllowlist.customPlaceholder')"
                   class="min-w-0 flex-1 rounded border border-gray-300 bg-white px-2 py-1.5 text-sm text-gray-700 focus:border-primary-500 focus:outline-none dark:border-dark-500 dark:bg-dark-700 dark:text-gray-200"
                   @keydown.enter.prevent="submitCreateAllowlistCustomEntry"
                 />
-                <button
+                <button v-permission="'groups.update'"
                   type="button"
                   class="rounded bg-primary-600 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-primary-700"
                   @click="submitCreateAllowlistCustomEntry"
@@ -2094,7 +2096,7 @@
           >
             {{ t("common.cancel") }}
           </button>
-          <button
+          <button v-permission="'groups.create'"
             type="submit"
             form="create-group-form"
             :disabled="submitting"
@@ -2134,7 +2136,7 @@
       width="wide"
       @close="closeEditModal"
     >
-      <form
+      <form v-permission="'groups.update'"
         v-if="editingGroup"
         id="edit-group-form"
         @submit.prevent="handleUpdateGroup"
@@ -2290,6 +2292,7 @@
           />
           <p class="input-hint">{{ t("admin.groups.form.rpmLimitHint") }}</p>
         </div>
+        <ResponseResultCacheField v-model="editResultCacheConfig" :disabled="!can('groups.update')" />
         <ReasoningEffortPolicyFields
           v-if="supportsReasoningEffortPolicyPlatform(editForm.platform)"
           ref="editReasoningEffortPolicyRef"
@@ -2518,14 +2521,14 @@
             </div>
             <div class="border-t border-gray-200 px-3 py-2 dark:border-dark-600">
               <div class="flex items-center gap-2">
-                <input
+                <input v-permission="'groups.update'"
                   v-model="editAllowlistCustomEntry"
                   type="text"
                   :placeholder="t('admin.groups.modelAllowlist.customPlaceholder')"
                   class="min-w-0 flex-1 rounded border border-gray-300 bg-white px-2 py-1.5 text-sm text-gray-700 focus:border-primary-500 focus:outline-none dark:border-dark-500 dark:bg-dark-700 dark:text-gray-200"
                   @keydown.enter.prevent="submitEditAllowlistCustomEntry"
                 />
-                <button
+                <button v-permission="'groups.update'"
                   type="button"
                   class="rounded bg-primary-600 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-primary-700"
                   @click="submitEditAllowlistCustomEntry"
@@ -3757,7 +3760,7 @@
           >
             {{ t("common.cancel") }}
           </button>
-          <button
+          <button v-permission="'groups.update'"
             type="submit"
             form="edit-group-form"
             :disabled="submitting"
@@ -3791,7 +3794,7 @@
     </BaseDialog>
 
     <!-- Delete Confirmation Dialog -->
-    <ConfirmDialog
+    <ConfirmDialog v-if="can('groups.delete')"
       :show="showDeleteDialog"
       :title="t('admin.groups.deleteGroup')"
       :message="deleteConfirmMessage"
@@ -3802,7 +3805,7 @@
       @cancel="showDeleteDialog = false"
     />
 
-    <ConfirmDialog
+    <ConfirmDialog v-if="can('groups.update')"
       :show="showUnsupportedLiveConfirm"
       :title="t('admin.groups.openaiLive.unsupportedTitle')"
       :message="t('admin.groups.openaiLive.unsupportedMessage')"
@@ -3884,7 +3887,7 @@
           >
             {{ t("common.cancel") }}
           </button>
-          <button
+          <button v-permission="'groups.update'"
             @click="saveSortOrder"
             :disabled="sortSubmitting"
             class="btn btn-primary"
@@ -4031,7 +4034,7 @@
                         >
                           <Icon name="edit" size="sm" />
                         </button>
-                        <button
+                        <button v-permission="'groups.update'"
                           type="button"
                           class="rounded p-1.5 text-gray-500 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-900/20 dark:hover:text-red-400"
                           :title="t('common.delete')"
@@ -4049,7 +4052,7 @@
         </section>
 
         <section class="space-y-5">
-          <form class="space-y-3" @submit.prevent="saveCompositeRoute">
+          <form v-permission="'groups.update'" class="space-y-3" @submit.prevent="saveCompositeRoute">
             <div class="flex items-center justify-between gap-3">
               <h3 class="text-sm font-semibold text-gray-900 dark:text-white">
                 {{
@@ -4161,7 +4164,7 @@
                 />
                 {{ t("admin.groups.compositeRoutes.enabled") }}
               </label>
-              <button
+              <button v-permission="'groups.update'"
                 type="submit"
                 class="btn btn-primary"
                 :disabled="compositeRouteSaving"
@@ -4289,10 +4292,15 @@
       @close="showRPMOverridesModal = false"
       @success="loadGroups"
     />
+    <BaseDialog :show="!!pluginChainGroup && can('groups.read') && can('plugin_instances.read')" :title="t('admin.pluginBindings.groupChain', { name: pluginChainGroup?.name })" @close="pluginChainGroup = null">
+      <PluginGroupBindingsPanel v-if="pluginChainGroup && can('groups.read') && can('plugin_instances.read')" :group-id="pluginChainGroup.id" />
+    </BaseDialog>
   </AppLayout>
 </template>
 
 <script setup lang="ts">
+import { usePermission } from '@/composables/usePermission'
+const { can } = usePermission()
 import { ref, reactive, computed, onMounted, onUnmounted, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { useAppStore } from "@/stores/app";
@@ -4316,6 +4324,7 @@ import {
   GROUP_PLATFORM_OPTIONS,
 } from "@/constants/platforms";
 import type { Column } from "@/components/common/types";
+import PluginGroupBindingsPanel from '@/components/admin/plugin/PluginGroupBindingsPanel.vue';
 import AppLayout from "@/components/layout/AppLayout.vue";
 import TablePageLayout from "@/components/layout/TablePageLayout.vue";
 import DataTable from "@/components/common/DataTable.vue";
@@ -4334,6 +4343,9 @@ import GroupRPMOverridesModal from "@/components/admin/group/GroupRPMOverridesMo
 import GroupCapacityBadge from "@/components/common/GroupCapacityBadge.vue";
 import ReasoningEffortPolicyFields from "@/components/admin/group/ReasoningEffortPolicyFields.vue";
 import CodexManifestAccountsField from "@/components/admin/group/CodexManifestAccountsField.vue";
+import ResponseResultCacheField from "@/components/admin/group/ResponseResultCacheField.vue";
+import type { ResponseResultCacheInput } from "@/types";
+import { createDefaultResultCacheInput, resultCacheConfigToInput, isResultCacheInputValid } from "./groupsResultCache";
 import PricingEntryCard from "@/components/admin/channel/PricingEntryCard.vue";
 import type { PricingFormEntry } from "@/components/admin/channel/types";
 import {
@@ -4482,6 +4494,8 @@ const groupPricingToAPI = (
 
 const { t } = useI18n();
 const appStore = useAppStore();
+const pluginChainGroup = ref<AdminGroup | null>(null);
+watch(() => can('groups.read') && can('plugin_instances.read'), allowed => { if (!allowed) pluginChainGroup.value = null }, { flush: 'sync' });
 const authStore = useAuthStore();
 const onboardingStore = useOnboardingStore();
 
@@ -4921,6 +4935,13 @@ const createReasoningEffortPolicyRef = ref<ReasoningEffortPolicyFieldsExpose | n
 const editReasoningEffortPolicyRef = ref<ReasoningEffortPolicyFieldsExpose | null>(null);
 
 // 固定账号获取 Codex Model Manifest（仅 openai 分组编辑对话框）
+const resultCacheDefaults = createDefaultResultCacheInput;
+const createResultCacheConfig = ref<ResponseResultCacheInput>(resultCacheDefaults());
+const editResultCacheConfig = ref<ResponseResultCacheInput>(resultCacheDefaults());
+const validateResultCacheConfig = (cfg: ResponseResultCacheInput) => {
+ const ok = isResultCacheInputValid(cfg);
+ if (!ok) appStore.showError(t("admin.groups.resultCache.invalid")); return ok;
+};
 type CodexManifestAccountsFieldExpose = {
   validate: () => boolean;
   resetValidation: () => void;
@@ -5866,6 +5887,7 @@ const closeCreateModal = () => {
   createForm.mcp_xml_inject = true;
   createForm.copy_accounts_from_group_ids = [];
   createForm.rpm_limit = 0;
+ createResultCacheConfig.value = resultCacheDefaults();
   createForm.max_reasoning_effort = "";
   createForm.max_reasoning_effort_over_limit = reasoningEffortOverLimitDowngrade;
   createForm.reasoning_effort_mappings = [];
@@ -5928,6 +5950,7 @@ const validateGroupReasoningMultipliers = (pricing: PricingFormEntry[]): boolean
 };
 
 const handleCreateGroup = async () => {
+ if (!validateResultCacheConfig(createResultCacheConfig.value)) return;
   if (!createForm.name.trim()) {
     appStore.showError(t("admin.groups.nameRequired"));
     return;
@@ -5993,6 +6016,7 @@ const handleCreateGroup = async () => {
       model_allowlist: buildModelAllowlistConfig(createModelAllowlistState),
       // 创建时固定账号 manifest 固定发送关闭状态（后端创建路径禁止开启）
       codex_models_manifest_config: createCodexManifestDefaults(),
+      response_result_cache_config: resultCacheConfigToInput(createResultCacheConfig.value),
       supported_model_scopes: normalizeSupportedModelScopesForPlatform(
         createForm.platform,
         createForm.supported_model_scopes,
@@ -6181,6 +6205,8 @@ const handleEdit = async (group: AdminGroup) => {
   editForm.mcp_xml_inject = group.mcp_xml_inject ?? true;
   editForm.copy_accounts_from_group_ids = []; // 复制账号字段每次编辑时重置为空
   editForm.rpm_limit = group.rpm_limit ?? 0;
+ const rc = group.response_result_cache_config;
+ editResultCacheConfig.value = resultCacheConfigToInput(rc);
   editForm.max_reasoning_effort = normalizeReasoningEffortForPlatform(
     group.platform,
     group.max_reasoning_effort,
@@ -6267,6 +6293,7 @@ const closeEditModal = () => {
 };
 
 const handleUpdateGroup = async () => {
+ if (!validateResultCacheConfig(editResultCacheConfig.value)) return;
   if (!editingGroup.value) return;
   if (!editForm.name.trim()) {
     appStore.showError(t("admin.groups.nameRequired"));
@@ -6341,6 +6368,7 @@ const handleUpdateGroup = async () => {
         editModelRoutingRules.value,
       ),
       model_allowlist: buildModelAllowlistConfig(editModelAllowlistState),
+      response_result_cache_config: resultCacheConfigToInput(editResultCacheConfig.value),
       // 非 openai 平台提交关闭状态，与后端归一化一致
       codex_models_manifest_config:
         editForm.platform === "openai"

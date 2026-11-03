@@ -46,3 +46,15 @@ func TestMatchesSemverRange(t *testing.T) {
 	assert.False(t, matchesSemverRange("dev", ">=0.1.0"))
 	assert.False(t, matchesSemverRange("0.1.179", "^0.1.0"))
 }
+
+func TestPluginCompatibilityIndependentTasksSupported(t *testing.T) {
+	m := testPluginGeneralManifest()
+	m.Capabilities = []PluginCapability{{ID: PluginCapabilityIndependentTask}}
+	m.General.Hooks = nil
+	m.General.Tasks = []PluginTaskEntry{{Name: "sync_prices"}}
+	m.General.HostCapabilities = []string{"host.kv.v1", "host.network.read.v1", "host.channel.pricing.read.v1", "host.channel.pricing.write.v1"}
+	require.NoError(t, m.Validate())
+	require.True(t, EvaluatePluginCompatibility(m, PluginHostInfo{Version: "0.1.179"}).Compatible)
+	m.General.HostCapabilities = append(m.General.HostCapabilities, "host.account.credentials.v1")
+	require.False(t, EvaluatePluginCompatibility(m, PluginHostInfo{Version: "0.1.179"}).Compatible)
+}

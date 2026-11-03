@@ -13,6 +13,14 @@ import (
 )
 
 const securityAuditCompletedContextKey = "sub2api.security_audit.completed"
+const securityAuditHTTPIdentityContextKey = "sub2api.security_audit.http_identity"
+
+type securityAuditHTTPIdentity struct {
+	userID, apiKeyID, groupID int64
+	protocol, model, stage    string
+	bodyHash                  [sha256.Size]byte
+}
+
 const securityAuditWSTurnContextKey = "sub2api.security_audit.ws_turn"
 const securityAuditWSDedupeContextKey = "sub2api.security_audit.ws_dedupe"
 
@@ -69,10 +77,26 @@ func runSecurityAudit(c *gin.Context, reqLog *zap.Logger, coordinator *securitya
 	if c == nil || c.Request == nil {
 		return nil
 	}
+	identity := securityAuditHTTPIdentity{userID: subject.UserID, protocol: protocol, model: model, stage: strings.TrimSpace(stage), bodyHash: sha256.Sum256(body)}
+	if apiKey != nil {
+		identity.apiKeyID = apiKey.ID
+		if apiKey.GroupID != nil {
+			identity.groupID = *apiKey.GroupID
+		}
+	}
 	cacheCompletion := cachesSecurityAuditCompletion(stage)
 	if cacheCompletion {
 		if completed, exists := c.Get(securityAuditCompletedContextKey); exists && completed == true {
-			return nil
+			// Do not change the legacy detached image/media precheck contract.
+			// Identity-bound reuse is required for general gateway plugin requests,
+			// whose input/fallback bodies or actual group can change in this request.
+			if _, pluginRequest := c.Get(pluginGatewayStateKey); !pluginRequest {
+				return nil
+			}
+			cached, hasIdentity := c.Get(securityAuditHTTPIdentityContextKey)
+			if hasIdentity && cached == identity {
+				return nil
+			}
 		}
 	}
 	if coordinator == nil {
@@ -91,6 +115,7 @@ func runSecurityAudit(c *gin.Context, reqLog *zap.Logger, coordinator *securitya
 		}
 		if decision.AllowNextStage && cacheCompletion {
 			c.Set(securityAuditCompletedContextKey, true)
+			c.Set(securityAuditHTTPIdentityContextKey, identity)
 		}
 		return &decision
 	}
@@ -121,6 +146,7 @@ func runSecurityAudit(c *gin.Context, reqLog *zap.Logger, coordinator *securitya
 	decision := coordinator.Check(c.Request.Context(), request)
 	if decision.AllowNextStage && cacheCompletion {
 		c.Set(securityAuditCompletedContextKey, true)
+		c.Set(securityAuditHTTPIdentityContextKey, identity)
 	}
 	logSecurityAuditDone(reqLog, request, decision, false)
 	return &decision

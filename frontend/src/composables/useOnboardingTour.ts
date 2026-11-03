@@ -5,6 +5,7 @@ import { useAuthStore as useUserStore } from '@/stores/auth'
 import { useOnboardingStore } from '@/stores/onboarding'
 import { useI18n } from 'vue-i18n'
 import { getAdminSteps, getUserSteps } from '@/components/Guide/steps'
+import { requestSidebarReveal } from '@/utils/sidebarNavigation'
 
 export interface OnboardingOptions {
   storageKey?: string
@@ -80,6 +81,8 @@ export function useOnboardingTour(options: OnboardingOptions) {
    * 检查元素是否存在，如果不存在则重试
    */
   const ensureElement = async (selector: string, timeout = 5000): Promise<boolean> => {
+    requestSidebarReveal(selector)
+    await nextTick()
     const startTime = Date.now()
     while (Date.now() - startTime < timeout) {
       const element = document.querySelector(selector)
@@ -275,13 +278,16 @@ export function useOnboardingTour(options: OnboardingOptions) {
         cleanupClickListener()
 
         // 尝试等待元素
-        if (!element && step.element && typeof step.element === 'string') {
+        if ((!element || element.getBoundingClientRect().height === 0) && step.element && typeof step.element === 'string') {
            const exists = await ensureElement(step.element, 8000)
            if (!exists) {
              console.warn(`Tour element not found after 8s: ${step.element}`)
              return
            }
            element = document.querySelector(step.element) as HTMLElement
+           // driver.js does not await this hook: repeat scrolling after v-show reveals the target.
+           element.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'auto' })
+           driverInstance?.refresh()
         }
 
         if (isInteractiveStep(step) && element) {

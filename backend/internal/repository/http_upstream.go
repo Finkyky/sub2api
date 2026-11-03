@@ -27,6 +27,7 @@ import (
 	"golang.org/x/net/http2"
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/codexclient"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/proxyurl"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/proxyutil"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/servertiming"
@@ -98,12 +99,15 @@ const (
 )
 
 const (
-	upstreamProtocolModeDefault          = "default"
-	upstreamProtocolModeLongStreamH2     = "long_stream_h2"
-	upstreamProtocolModeOpenAIH1         = "openai_h1"
-	upstreamProtocolModeOpenAIH2         = "openai_h2"
-	upstreamProtocolModeOpenAIH1Fallback = "openai_h1_fallback"
-	upstreamProtocolModeGrok             = "grok"
+	upstreamProtocolModeDefault           = "default"
+	upstreamProtocolModeLongStreamH2      = "long_stream_h2"
+	upstreamProtocolModeOpenAIH1          = "openai_h1"
+	upstreamProtocolModeOpenAIH2          = "openai_h2"
+	upstreamProtocolModeOpenAIH1Fallback  = "openai_h1_fallback"
+	upstreamProtocolModeOpenAIH1NoReuse   = "openai_h1_noreuse"
+	upstreamProtocolModeCodexLinux        = "codex_linux"
+	upstreamProtocolModeCodexLinuxHarvest = "codex_linux_harvest"
+	upstreamProtocolModeGrok              = "grok"
 )
 
 var errUpstreamClientLimitReached = errors.New("upstream client cache limit reached")
@@ -209,6 +213,7 @@ func (s *httpUpstreamService) Do(req *http.Request, proxyURL string, accountID i
 	if req != nil {
 		profile = service.HTTPUpstreamProfileFromContext(req.Context())
 	}
+	profile = s.resolveCodexClientProfile(req, profile)
 
 	// 获取或创建对应的客户端，并标记请求占用
 	entry, err := s.acquireClientWithProfile(proxyURL, accountID, accountConcurrency, profile)
@@ -244,6 +249,12 @@ func (s *httpUpstreamService) Do(req *http.Request, proxyURL string, accountID i
 // profile 为 nil 时不启用 TLS 指纹，行为与 Do 方法相同。
 // profile 非 nil 时使用指定的 Profile 进行 TLS 指纹伪装。
 func (s *httpUpstreamService) DoWithTLS(req *http.Request, proxyURL string, accountID int64, accountConcurrency int, profile *tlsfingerprint.Profile) (*http.Response, error) {
+	if req != nil {
+		original := service.HTTPUpstreamProfileFromContext(req.Context())
+		if selected := s.resolveCodexClientProfile(req, original); selected != original {
+			return s.Do(req, proxyURL, accountID, accountConcurrency)
+		}
+	}
 	if profile == nil {
 		return s.Do(req, proxyURL, accountID, accountConcurrency)
 	}
@@ -969,7 +980,7 @@ func (s *httpUpstreamService) resolvePoolSettings(isolation string, accountConcu
 
 func (s *httpUpstreamService) applyProfilePoolSettings(settings poolSettings, profile service.HTTPUpstreamProfile) poolSettings {
 	switch profile {
-	case service.HTTPUpstreamProfileOpenAI:
+	case service.HTTPUpstreamProfileOpenAI, service.HTTPUpstreamProfileCodexLinux:
 		settings.responseHeaderTimeout = 0
 		if s != nil && s.cfg != nil && s.cfg.Gateway.OpenAIResponseHeaderTimeout > 0 {
 			settings.responseHeaderTimeout = time.Duration(s.cfg.Gateway.OpenAIResponseHeaderTimeout) * time.Second
@@ -1060,11 +1071,20 @@ func (s *httpUpstreamService) resolveOpenAIHTTP2Settings() openAIHTTP2Settings {
 }
 
 func (s *httpUpstreamService) resolveProtocolMode(profile service.HTTPUpstreamProfile, proxyKey string, parsedProxy *url.URL) string {
+	if profile == service.HTTPUpstreamProfileCodexLinux {
+		return upstreamProtocolModeCodexLinux
+	}
+	if profile == service.HTTPUpstreamProfileCodexLinuxHarvest {
+		return upstreamProtocolModeCodexLinuxHarvest
+	}
 	if profile == service.HTTPUpstreamProfileLongStream {
 		return upstreamProtocolModeLongStreamH2
 	}
 	if profile == service.HTTPUpstreamProfileGrok {
 		return upstreamProtocolModeGrok
+	}
+	if profile == service.HTTPUpstreamProfileOpenAIHarvest {
+		return upstreamProtocolModeOpenAIH1NoReuse
 	}
 	if profile != service.HTTPUpstreamProfileOpenAI {
 		return upstreamProtocolModeDefault
@@ -1388,6 +1408,16 @@ func buildUpstreamTransport(settings poolSettings, proxyURL *url.URL, protocolMo
 		ResponseHeaderTimeout: settings.responseHeaderTimeout,
 	}
 	switch protocolMode {
+	case upstreamProtocolModeCodexLinux, upstreamProtocolModeCodexLinuxHarvest:
+		if protocolMode == upstreamProtocolModeCodexLinuxHarvest {
+			transport.DisableKeepAlives = true
+			transport.MaxIdleConns = 0
+			transport.MaxIdleConnsPerHost = 0
+		}
+		if err := codexclient.ConfigureTransport(transport, proxyURL, false); err != nil {
+			return nil, err
+		}
+		return transport, nil
 	case upstreamProtocolModeLongStreamH2, upstreamProtocolModeOpenAIH2:
 		transport.ForceAttemptHTTP2 = true
 		// 显式配置 http2 并启用 PING 健康探测，剔除代理/NAT 静默掐断的死连接，
@@ -1397,6 +1427,13 @@ func buildUpstreamTransport(settings poolSettings, proxyURL *url.URL, protocolMo
 		}
 	case upstreamProtocolModeOpenAIH1:
 		transport.ForceAttemptHTTP2 = false
+		transport.TLSNextProto = make(map[string]func(string, *tls.Conn) http.RoundTripper)
+	case upstreamProtocolModeOpenAIH1NoReuse:
+		// Harvest must open a fresh CONNECT each attempt so the harvest proxy can rotate egress IPs.
+		transport.ForceAttemptHTTP2 = false
+		transport.DisableKeepAlives = true
+		transport.MaxIdleConns = 0
+		transport.MaxIdleConnsPerHost = 0
 		transport.TLSNextProto = make(map[string]func(string, *tls.Conn) http.RoundTripper)
 	case upstreamProtocolModeOpenAIH1Fallback:
 		// 显式禁用 HTTP/2，确保代理不兼容场景回退到 HTTP/1.1。

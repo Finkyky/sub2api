@@ -39,7 +39,7 @@
             >
               <Icon name="refresh" size="md" :class="loading ? 'animate-spin' : ''" />
             </button>
-            <button @click="openCreateDialog" class="btn btn-primary">
+            <button v-permission="'channels.create'" @click="openCreateDialog" class="btn btn-primary">
               <Icon name="plus" size="md" class="mr-2" />
               {{ t('admin.channels.createChannel', 'Create Channel') }}
             </button>
@@ -66,7 +66,7 @@
           </template>
 
           <template #cell-status="{ row }">
-            <Toggle
+            <Toggle v-if="can('channels.update')"
               :modelValue="row.status === 'active'"
               @update:modelValue="toggleChannelStatus(row)"
             />
@@ -98,14 +98,14 @@
 
           <template #cell-actions="{ row }">
             <div class="flex items-center gap-1">
-              <button
+              <button v-permission="'channels.update'"
                 @click="openEditDialog(row)"
                 class="flex flex-col items-center gap-0.5 rounded-lg p-1.5 text-gray-500 transition-colors hover:bg-gray-100 hover:text-primary-600 dark:hover:bg-dark-700 dark:hover:text-primary-400"
               >
                 <Icon name="edit" size="sm" />
                 <span class="text-xs">{{ t('common.edit', 'Edit') }}</span>
               </button>
-              <button
+              <button v-permission="'channels.delete'"
                 @click="handleDelete(row)"
                 class="flex flex-col items-center gap-0.5 rounded-lg p-1.5 text-gray-500 transition-colors hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-900/20 dark:hover:text-red-400"
               >
@@ -116,7 +116,7 @@
           </template>
 
           <template #empty>
-            <EmptyState
+            <EmptyState v-if="can('channels.create')"
               :title="t('admin.channels.noChannelsYet', 'No Channels Yet')"
               :description="t('admin.channels.createFirstChannel', 'Create your first channel to manage model pricing')"
               :action-text="t('admin.channels.createChannel', 'Create Channel')"
@@ -172,7 +172,7 @@
         </div>
 
         <!-- Tab Content -->
-        <form id="channel-form" @submit.prevent="handleSubmit" class="flex-1 overflow-y-auto pt-4">
+        <form v-permission="editingChannel ? 'channels.update' : 'channels.create'" id="channel-form" @submit.prevent="handleSubmit" class="flex-1 overflow-y-auto pt-4">
           <!-- Basic Settings Tab -->
           <div v-show="activeTab === 'basic'" class="space-y-5">
             <!-- Name -->
@@ -596,7 +596,7 @@
           <button @click="closeDialog" type="button" class="btn btn-secondary">
             {{ t('common.cancel', 'Cancel') }}
           </button>
-          <button
+          <button v-permission="editingChannel ? 'channels.update' : 'channels.create'"
             type="submit"
             form="channel-form"
             :disabled="submitting"
@@ -614,7 +614,7 @@
     </BaseDialog>
 
     <!-- Delete Confirmation -->
-    <ConfirmDialog
+    <ConfirmDialog v-if="can('channels.delete')"
       :show="showDeleteDialog"
       :title="t('admin.channels.deleteChannel', 'Delete Channel')"
       :message="deleteConfirmMessage"
@@ -628,6 +628,8 @@
 </template>
 
 <script setup lang="ts">
+import { usePermission } from '@/composables/usePermission'
+const { can } = usePermission()
 import { ref, reactive, computed, onMounted, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useAppStore } from '@/stores/app'

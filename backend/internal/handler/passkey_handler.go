@@ -9,7 +9,6 @@ import (
 	"strconv"
 	"strings"
 
-	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/ip"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/response"
 	middleware2 "github.com/Wei-Shaw/sub2api/internal/server/middleware"
@@ -21,17 +20,20 @@ type PasskeyHandler struct {
 	passkeys    *service.PasskeyService
 	authService *service.AuthService
 	settingSvc  *service.SettingService
+	rbacService *service.RBACService
 }
 
 func NewPasskeyHandler(
 	passkeys *service.PasskeyService,
 	authService *service.AuthService,
 	settingService *service.SettingService,
+	rbacService *service.RBACService,
 ) *PasskeyHandler {
 	return &PasskeyHandler{
 		passkeys:    passkeys,
 		authService: authService,
 		settingSvc:  settingService,
+		rbacService: rbacService,
 	}
 }
 
@@ -232,10 +234,10 @@ func (h *PasskeyHandler) ensureBackendModeAllowsUser(ctx context.Context, user *
 	if err := ensureLoginUserActive(user); err != nil {
 		return err
 	}
-	if h.settingSvc == nil || !h.settingSvc.IsBackendModeEnabled(ctx) || user.IsAdmin() {
+	if h.settingSvc == nil || !h.settingSvc.IsBackendModeEnabled(ctx) {
 		return nil
 	}
-	return infraerrors.Forbidden("BACKEND_MODE_ADMIN_ONLY", "Backend mode is active. Only admin login is allowed.")
+	return requireBackendModeAdminAccess(ctx, h.rbacService, user.ID)
 }
 
 func bindPasskeyFinishRequest(c *gin.Context) (*passkeyFinishRequest, bool) {

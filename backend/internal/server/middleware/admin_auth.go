@@ -18,8 +18,9 @@ func NewAdminAuthMiddleware(
 	userService *service.UserService,
 	settingService *service.SettingService,
 	auditService *service.AuditLogService,
+	rbac *service.RBACService,
 ) AdminAuthMiddleware {
-	return AdminAuthMiddleware(adminAuth(authService, userService, settingService, auditService))
+	return AdminAuthMiddleware(adminAuth(authService, userService, settingService, auditService, rbac))
 }
 
 // adminAuth 管理员认证中间件实现
@@ -31,6 +32,7 @@ func adminAuth(
 	userService *service.UserService,
 	settingService *service.SettingService,
 	auditService *service.AuditLogService,
+	rbac *service.RBACService,
 ) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		// WebSocket upgrade requests cannot set Authorization headers in browsers.
@@ -39,7 +41,7 @@ func adminAuth(
 		//   Sec-WebSocket-Protocol: sub2api-admin, jwt.<token>
 		if isWebSocketUpgradeRequest(c) {
 			if token := extractJWTFromWebSocketSubprotocol(c); token != "" {
-				if !validateJWTForAdmin(c, token, authService, userService, settingService, auditService) {
+				if !validateJWTForAdmin(c, token, authService, userService, settingService, auditService, rbac) {
 					return
 				}
 				c.Next()
@@ -77,7 +79,7 @@ func adminAuth(
 					AbortWithError(c, 401, "UNAUTHORIZED", "Authorization required")
 					return
 				}
-				if !validateJWTForAdmin(c, token, authService, userService, settingService, auditService) {
+				if !validateJWTForAdmin(c, token, authService, userService, settingService, auditService, rbac) {
 					return
 				}
 				c.Next()
@@ -159,8 +161,11 @@ func validateAdminAPIKey(
 		Concurrency: admin.Concurrency,
 	})
 	c.Set(string(ContextKeyUserRole), admin.Role)
+	c.Set(string(ContextKeySuperAdmin), true)
+	c.Set(string(ContextKeyAdminAccess), true)
 	c.Set(ContextKeyAuthEmail, admin.Email)
 	c.Set("auth_method", "admin_api_key")
+	c.Request = c.Request.WithContext(service.WithRBACActor(c.Request.Context(), service.RBACActor{UserID: admin.ID, AdminAPIKey: true}))
 	return true
 }
 
@@ -172,6 +177,7 @@ func validateJWTForAdmin(
 	userService *service.UserService,
 	settingService *service.SettingService,
 	auditService *service.AuditLogService,
+	rbac *service.RBACService,
 ) bool {
 	// 验证 JWT token
 	claims, err := authService.ValidateToken(token)
@@ -213,7 +219,17 @@ func validateJWTForAdmin(
 	}
 
 	// 检查管理员权限
-	if !user.IsAdmin() {
+	// Reload current RBAC authority; legacy role and JWT claims do not grant entry.
+	if rbac == nil {
+		AbortWithError(c, 503, "RBAC_UNAVAILABLE", "Permission service unavailable")
+		return false
+	}
+	snapshot, err := rbac.Snapshot(c.Request.Context(), user.ID)
+	if err != nil {
+		AbortWithError(c, 500, "INTERNAL_ERROR", "Failed to load administration permissions")
+		return false
+	}
+	if !snapshot.HasAdminAccess() {
 		AbortWithError(c, 403, "FORBIDDEN", "Admin access required")
 		return false
 	}
@@ -222,10 +238,13 @@ func validateJWTForAdmin(
 		UserID:      user.ID,
 		Concurrency: user.Concurrency,
 	})
-	c.Set(string(ContextKeyUserRole), user.Role)
+	c.Set(string(ContextKeyUserRole), service.RoleAdmin) // Request capability only; never persisted.
+	c.Set(string(ContextKeySuperAdmin), snapshot.IsSuperAdmin)
+	c.Set(string(ContextKeyAdminAccess), true)
 	c.Set(ContextKeyAuthEmail, user.Email)
 	c.Set(ContextKeySessionID, claims.SessionID)
 	c.Set("auth_method", "jwt")
+	c.Request = c.Request.WithContext(service.WithRBACActor(c.Request.Context(), service.RBACActor{UserID: user.ID}))
 
 	return true
 }

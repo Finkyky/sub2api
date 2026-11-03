@@ -3,6 +3,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import UserApiKeysModal from '../UserApiKeysModal.vue'
 import type { AdminUser } from '@/types'
 
+vi.mock('@/stores/auth', () => ({ useAuthStore: () => ({ hasPermission: () => true }) }))
+
 const { getKeys } = vi.hoisted(() => ({ getKeys: vi.fn() }))
 vi.mock('@/api/admin', () => ({ adminAPI: {
   users: { getUserApiKeys: getKeys }, groups: { getAll: vi.fn().mockResolvedValue([]) },

@@ -6,7 +6,8 @@ import GroupReplaceModal from '../GroupReplaceModal.vue'
 const mocks = vi.hoisted(() => ({ replaceGroup: vi.fn(), showError: vi.fn(), showSuccess: vi.fn() }))
 vi.mock('@/api/admin', () => ({ adminAPI: { users: { replaceGroup: mocks.replaceGroup } } }))
 vi.mock('@/stores/app', () => ({ useAppStore: () => mocks }))
-vi.mock('vue-i18n', () => ({ useI18n: () => ({ t: (key: string) => key }) }))
+vi.mock('@/stores/auth', () => ({ useAuthStore: () => ({ hasPermission: () => true }) }))
+vi.mock('vue-i18n', async (importOriginal) => ({ ...await importOriginal<typeof import('vue-i18n')>(), useI18n: () => ({ t: (key: string) => key }) }))
 enableAutoUnmount(afterEach)
 afterEach(() => vi.restoreAllMocks())
 beforeEach(() => {

@@ -1164,6 +1164,15 @@ export default {
           duplicate: '该条目已存在'
         }
       },
+      resultCache: {
+  "title": "响应结果缓存",
+  "hint": "客户端显式声明后，相同完整的非流式 Chat 请求可复用响应，无需再次调用上游；命中不新增生成费用。",
+  "ttl": "有效期（秒）",
+  "maxBytes": "最大响应大小（字节）",
+  "sharing": "允许客户端显式使用分组共享",
+  "sharingHint": "默认按用户和 API Key 隔离。仅为公开内容开启共享；客户端还需声明 scope=group。",
+  "invalid": "缓存有效期须为 1～86400 秒，响应大小须为 1024～2097152 字节。"
+},
       codexModelsManifest: {
         title: '固定账号获取模型列表',
         hint: '开启后，普通模型列表与 Codex Model Manifest 均优先从选定账号获取并合并，再应用账号映射和分组列表过滤；限流/过载中的选定账号仍会被使用。',

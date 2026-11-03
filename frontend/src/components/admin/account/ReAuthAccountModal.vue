@@ -151,7 +151,7 @@
         <button type="button" class="btn btn-secondary" @click="handleClose">
           {{ t('common.cancel') }}
         </button>
-        <button
+        <button v-permission="'accounts.update'"
           v-if="isManualInputMethod"
           type="button"
           :disabled="!canExchangeCode"

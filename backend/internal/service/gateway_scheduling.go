@@ -938,6 +938,9 @@ func (s *GatewayService) resolveGatewayGroup(ctx context.Context, groupID *int64
 		}
 
 		if !group.ClaudeCodeOnly || IsClaudeCodeClient(ctx) {
+			if err := validatePluginGatewayEffectiveGroup(ctx, currentID); err != nil {
+				return nil, nil, err
+			}
 			return group, &currentID, nil
 		}
 

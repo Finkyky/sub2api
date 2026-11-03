@@ -1,6 +1,7 @@
 <template>
   <AppLayout>
-    <TablePageLayout>
+    <p v-if="!authStore.hasPermission('users.read')" role="status" class="p-6">{{ rt('rbac.noPermission') }}</p>
+    <TablePageLayout v-else>
       <!-- Single Row: Search, Filters, and Actions -->
       <template #filters>
         <div class="flex flex-wrap items-center gap-3">
@@ -22,6 +23,14 @@
               />
             </div>
 
+            <div class="w-full sm:w-56">
+              <label for="rbac-user-role-filter" class="sr-only">{{ rt('rbac.roleFilter') }}</label>
+              <select id="rbac-user-role-filter" v-model="rbacRoleFilter" class="input" :title="rt('rbac.pageFilterHint')">
+                <option value="">{{ rt('rbac.allRoles') }}</option>
+                <option v-for="role in pageRoles" :key="role.id" :value="String(role.id)">{{ roleName(role) }}</option>
+              </select>
+              <p class="mt-1 text-xs text-gray-500">{{ rt('rbac.pageFilterHint') }}</p>
+            </div>
             <!-- Role Filter (visible when enabled) -->
             <div v-if="visibleFilters.has('role')" class="w-full sm:w-32">
               <Select
@@ -233,6 +242,7 @@
               </div>
               <!-- Attributes Config Button -->
               <button
+                v-if="authStore.hasPermission('user_attributes.manage')"
                 @click="showAttributesModal = true"
                 class="btn btn-secondary px-2 md:px-3"
                 :title="t('admin.users.attributes.configButton')"
@@ -243,7 +253,7 @@
             </div>
 
             <button
-              v-if="selectedCount > 0"
+              v-if="selectedCount > 0 && authStore.hasPermission('users.update')"
               class="btn btn-secondary flex-1 md:flex-initial"
               data-test="bulk-edit-limits"
               @click="showBulkEditModal = true"
@@ -253,7 +263,7 @@
             </button>
 
             <button
-              v-if="selectedCount > 0"
+              v-if="selectedCount > 0 && authStore.hasPermission('users.delete')"
               class="btn btn-danger flex-1 md:flex-initial"
               data-test="bulk-delete-users"
               :disabled="bulkDeleting"
@@ -264,7 +274,7 @@
             </button>
 
             <!-- Create User Button (full width on mobile, auto width on desktop) -->
-            <button @click="showCreateModal = true" class="btn btn-primary flex-1 md:flex-initial">
+            <button v-if="authStore.hasPermission('users.create')" data-testid="create-user" @click="showCreateModal = true" class="btn btn-primary flex-1 md:flex-initial">
               <Icon name="plus" size="md" class="mr-2" />
               {{ t('admin.users.createUser') }}
             </button>
@@ -274,12 +284,15 @@
 
       <!-- Users Table -->
       <template #table>
+        <div v-if="userRolesFailed" role="alert" class="p-3 text-sm text-amber-700 dark:text-amber-400">
+          {{ rt('rbac.rolesFailed') }} <button class="btn btn-secondary" @click="loadUsers">{{ rt('rbac.retry') }}</button>
+        </div>
         <DataTable
           :columns="columns"
           :data="sortedUsers"
           :loading="loading"
           row-key="id"
-          selectable
+          :selectable="authStore.hasPermission('users.update') || authStore.hasPermission('users.delete')"
           :selected-keys="selectedIds"
           :selection-label="getUserSelectionLabel"
           :actions-count="7"
@@ -336,10 +349,15 @@
             </div>
           </template>
 
-          <template #cell-role="{ value }">
-            <span :class="['badge', value === 'admin' ? 'badge-purple' : 'badge-gray']">
-              {{ t('admin.users.roles.' + value) }}
-            </span>
+          <template #cell-role="{ row }">
+            <div class="flex max-w-xs flex-wrap gap-1">
+              <span v-for="role in row.roles || []" :key="role.id" class="badge badge-gray">{{ roleName(role) }}</span>
+              <span v-if="userRoleState[row.id] === 'loading'" class="text-xs text-gray-500">{{ rt('rbac.loading') }}</span>
+              <span v-else-if="userRoleState[row.id] === 'error'" class="text-xs text-amber-700">{{ rt('rbac.loadFailed') }}</span>
+              <span v-else-if="!row.roles?.length" class="text-xs text-gray-500">{{ rt('rbac.none') }}</span>
+              <p v-if="isProtectedUser(row)" class="w-full text-xs text-amber-700 dark:text-amber-400">{{ rt('rbac.protectedUser') }}</p>
+              <p v-else-if="userRoleState[row.id] === 'ready' && !userWithinCeiling(row.id)" class="w-full text-xs text-amber-700 dark:text-amber-400">{{ rt('rbac.ceiling') }}</p>
+            </div>
           </template>
 
           <template #cell-groups="{ row }">
@@ -365,7 +383,7 @@
                 </div>
                 <!-- 点击展开分组操作菜单 -->
                 <div
-                  v-if="expandedGroupUserId === row.id"
+                  v-if="expandedGroupUserId === row.id && authStore.hasPermission('users.update')"
                   class="absolute left-0 top-full z-50 mt-1.5 min-w-[160px] overflow-hidden rounded-lg border border-gray-200 bg-white py-1 text-xs shadow-xl dark:border-dark-600 dark:bg-dark-700"
                 >
                   <div class="border-b border-gray-100 px-3 py-1.5 text-[10px] font-medium uppercase tracking-wider text-gray-400 dark:border-dark-600 dark:text-dark-400">
@@ -448,6 +466,7 @@
                 </div>
               </div>
               <button
+                v-if="authStore.hasPermission('users.update')"
                 @click.stop="handleDeposit(row)"
                 class="rounded px-2 py-0.5 text-xs font-medium text-emerald-600 transition-colors hover:bg-emerald-50 dark:text-emerald-400 dark:hover:bg-emerald-900/20"
                 :title="t('admin.users.deposit')"
@@ -462,6 +481,7 @@
               type="button"
               class="block text-left underline decoration-dashed decoration-gray-300 underline-offset-4 transition-colors hover:decoration-primary-400 dark:decoration-dark-500"
               :title="t('admin.users.platformQuota.cellColumnTooltip')"
+              :disabled="!authStore.hasPermission('users.update')"
               @click="handlePlatformQuota(row)"
             >
               <UserPlatformQuotaCell :quotas="platformQuotaStats[row.id]" />
@@ -614,6 +634,8 @@
             <div class="flex items-center gap-1">
               <!-- Edit Button -->
               <button
+                v-if="authStore.hasPermission('users.update')"
+                :data-testid="`edit-user-${row.id}`"
                 @click="handleEdit(row)"
                 class="flex flex-col items-center gap-0.5 rounded-lg p-1.5 text-gray-500 transition-colors hover:bg-gray-100 hover:text-primary-600 dark:hover:bg-dark-700 dark:hover:text-primary-400"
               >
@@ -623,7 +645,8 @@
 
               <!-- Toggle Status Button (not for admin) -->
               <button
-                v-if="row.role !== 'admin'"
+                v-if="authStore.hasPermission('users.update') && canSelectUser(row.id)"
+                :data-testid="`toggle-user-${row.id}`"
                 @click="handleToggleStatus(row)"
                 :class="[
                   'flex flex-col items-center gap-0.5 rounded-lg p-1.5 text-gray-500 transition-colors',
@@ -637,6 +660,9 @@
                 <span class="text-xs">{{ row.status === 'active' ? t('admin.users.disable') : t('admin.users.enable') }}</span>
               </button>
 
+              <button v-if="authStore.hasPermission('users.read')" class="btn btn-secondary btn-sm" :data-testid="`roles-user-${row.id}`" @click="roleTarget = row">
+                {{ authStore.hasPermission('users.roles.assign') && authStore.hasPermission('roles.read') && canSelectUser(row.id) ? rt('rbac.assignRoles') : rt('rbac.viewRoles') }}
+              </button>
               <!-- More Actions Menu Trigger -->
               <button
                 @click="openActionMenu(row, $event)"
@@ -653,8 +679,8 @@
             <EmptyState
               :title="t('admin.users.noUsersYet')"
               :description="t('admin.users.createFirstUser')"
-              :action-text="t('admin.users.createUser')"
-              @action="showCreateModal = true"
+              :action-text="authStore.hasPermission('users.create') ? t('admin.users.createUser') : undefined"
+              @action="authStore.hasPermission('users.create') && (showCreateModal = true)"
             />
           </template>
         </DataTable>
@@ -685,6 +711,7 @@
             <template v-if="user.id === activeMenuId">
               <!-- View API Keys -->
               <button
+                v-if="authStore.hasPermission('api_keys.read')"
                 @click="handleViewApiKeys(user); closeActionMenu()"
                 class="flex w-full items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-dark-700"
               >
@@ -694,6 +721,7 @@
 
               <!-- Allowed Groups -->
               <button
+                v-if="authStore.hasPermission('users.update')"
                 @click="handleAllowedGroups(user); closeActionMenu()"
                 class="flex w-full items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-dark-700"
               >
@@ -705,6 +733,7 @@
 
               <!-- Deposit -->
               <button
+                v-if="authStore.hasPermission('users.update')"
                 @click="handleDeposit(user); closeActionMenu()"
                 class="flex w-full items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-dark-700"
               >
@@ -714,6 +743,7 @@
 
               <!-- Withdraw -->
               <button
+                v-if="authStore.hasPermission('users.update')"
                 @click="handleWithdraw(user); closeActionMenu()"
                 class="flex w-full items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-dark-700"
               >
@@ -725,6 +755,7 @@
 
               <!-- Platform Quotas -->
               <button
+                v-if="authStore.hasPermission('users.update')"
                 @click="handlePlatformQuota(user); closeActionMenu()"
                 class="flex w-full items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-dark-700"
               >
@@ -734,6 +765,7 @@
 
               <!-- Balance History -->
               <button
+                v-if="authStore.hasPermission('users.read')"
                 @click="handleBalanceHistory(user); closeActionMenu()"
                 class="flex w-full items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-dark-700"
               >
@@ -745,7 +777,7 @@
 
               <!-- Delete (not for admin) -->
               <button
-                v-if="user.role !== 'admin'"
+                v-if="authStore.hasPermission('users.delete') && canSelectUser(user.id)"
                 @click="handleDelete(user); closeActionMenu()"
                 class="flex w-full items-center gap-2 px-4 py-2 text-sm text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/20"
               >
@@ -758,6 +790,7 @@
       </div>
     </Teleport>
 
+    <UserRolesDialog v-if="roleTarget" :show="true" :user="roleTarget" @close="roleTarget = null" @saved="loadUsers" />
     <ConfirmDialog :show="showDeleteDialog" :title="t('admin.users.deleteUser')" :message="t('admin.users.deleteConfirm', { email: deletingUser?.email })" :danger="true" @confirm="confirmDelete" @cancel="showDeleteDialog = false" />
     <ConfirmDialog
       :show="bulkDeleteIds.length > 0"
@@ -768,26 +801,28 @@
       @confirm="confirmBulkDelete"
       @cancel="bulkDeleteIds = []"
     />
-    <UserCreateModal :show="showCreateModal" @close="showCreateModal = false" @success="loadUsers" />
-    <UserEditModal :show="showEditModal" :user="editingUser" @close="closeEditModal" @success="loadUsers" />
+    <UserCreateModal v-if="authStore.hasPermission('users.create')" :show="showCreateModal" @close="showCreateModal = false" @success="loadUsers" />
+    <UserEditModal v-if="authStore.hasPermission('users.update')" :sensitive-allowed="authStore.isSuperAdmin || (!!editingUser && canSelectUser(editingUser.id))" :show="showEditModal" :user="editingUser" @close="closeEditModal" @success="loadUsers" />
     <BulkEditUserModal
+      v-if="authStore.hasPermission('users.update')"
       :show="showBulkEditModal"
       :selected-ids="selectedIds"
       @close="showBulkEditModal = false"
       @success="handleBulkLimitsSuccess"
     />
     <UserPlatformQuotaModal
+      v-if="authStore.hasPermission('users.update')"
       :show="showPlatformQuotaModal"
       :user="platformQuotaUser"
       @close="closePlatformQuotaModal"
       @success="loadUsers"
     />
-    <UserApiKeysModal :show="showApiKeysModal" :user="viewingUser" @close="closeApiKeysModal" />
-    <UserAllowedGroupsModal :show="showAllowedGroupsModal" :user="allowedGroupsUser" @close="closeAllowedGroupsModal" @success="loadUsers" />
-    <UserBalanceModal :show="showBalanceModal" :user="balanceUser" :operation="balanceOperation" @close="closeBalanceModal" @success="loadUsers" />
-    <UserBalanceHistoryModal :show="showBalanceHistoryModal" :user="balanceHistoryUser" @close="closeBalanceHistoryModal" @deposit="handleDepositFromHistory" @withdraw="handleWithdrawFromHistory" />
-    <GroupReplaceModal :show="showGroupReplaceModal" :user="groupReplaceUser" :old-group="groupReplaceOldGroup" :all-groups="allGroups" @close="closeGroupReplaceModal" @success="loadUsers" />
-    <UserAttributesConfigModal :show="showAttributesModal" @close="handleAttributesModalClose" />
+    <UserApiKeysModal v-if="authStore.hasPermission('api_keys.read')" :show="showApiKeysModal" :user="viewingUser" @close="closeApiKeysModal" />
+    <UserAllowedGroupsModal v-if="authStore.hasPermission('users.update')" :show="showAllowedGroupsModal" :user="allowedGroupsUser" @close="closeAllowedGroupsModal" @success="loadUsers" />
+    <UserBalanceModal v-if="authStore.hasPermission('users.update')" :show="showBalanceModal" :user="balanceUser" :operation="balanceOperation" @close="closeBalanceModal" @success="loadUsers" />
+    <UserBalanceHistoryModal :hide-actions="!authStore.hasPermission('users.update')" v-if="authStore.hasPermission('users.read')" :show="showBalanceHistoryModal" :user="balanceHistoryUser" @close="closeBalanceHistoryModal" @deposit="handleDepositFromHistory" @withdraw="handleWithdrawFromHistory" />
+    <GroupReplaceModal v-if="authStore.hasPermission('users.update')" :show="showGroupReplaceModal" :user="groupReplaceUser" :old-group="groupReplaceOldGroup" :all-groups="allGroups" @close="closeGroupReplaceModal" @success="loadUsers" />
+    <UserAttributesConfigModal v-if="authStore.hasPermission('user_attributes.manage')" :show="showAttributesModal" @close="handleAttributesModalClose" />
   </AppLayout>
 </template>
 
@@ -795,12 +830,20 @@
 import { ref, reactive, computed, onMounted, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useAppStore } from '@/stores/app'
+import { useAuthStore } from '@/stores/auth'
+import { rbacAPI, type RBACRole } from '@/api/admin/rbac'
+import UserRolesDialog from '@/components/admin/rbac/UserRolesDialog.vue'
+import { isProtectedUser, isSuperRole, withinCeiling } from '@/components/admin/rbac/policy'
+import { rbacMessages } from '@/components/admin/rbac/messages'
+import { useRBACLabels } from '@/components/admin/rbac/labels'
 import { getPersistedPageSize } from '@/composables/usePersistedPageSize'
 import { useTableSelection } from '@/composables/useTableSelection'
 import { formatDateTime } from '@/utils/format'
 import Icon from '@/components/icons/Icon.vue'
 
 const { t } = useI18n()
+const { t: rt } = useI18n({ useScope: 'local', messages: rbacMessages })
+const { roleName } = useRBACLabels()
 import { adminAPI } from '@/api/admin'
 import type { AdminUser, AdminGroup, UserAttributeDefinition } from '@/types'
 import type { BatchUserUsageStats } from '@/api/admin/dashboard'
@@ -832,6 +875,40 @@ import UserBalanceHistoryModal from '@/components/admin/user/UserBalanceHistoryM
 import GroupReplaceModal from '@/components/admin/user/GroupReplaceModal.vue'
 
 const appStore = useAppStore()
+const authStore = useAuthStore()
+const roleTarget = ref<AdminUser | null>(null)
+const rbacRoleFilter = ref('')
+const userRoleDetails = ref<Record<number, RBACRole[]>>({})
+const userWithinCeiling = (id: number) => userRoleDetails.value[id]?.every(role => withinCeiling(authStore, role)) === true
+const userRoleState = ref<Record<number, 'loading' | 'ready' | 'error'>>({})
+// Preserve known users across pages for cross-page selection, but refresh role data on each load.
+const knownUsers = new Map<number, AdminUser>()
+const userRolesFailed = computed(() => users.value.some(user => userRoleState.value[user.id] === 'error'))
+const pageRoles = computed(() => [...new Map(users.value.flatMap(user => user.roles || []).map(role => [role.id, role])).values()])
+const roleFilteredUsers = computed(() => rbacRoleFilter.value
+  ? users.value.filter(user => user.roles?.some(role => String(role.id) === rbacRoleFilter.value)) : users.value)
+const canSelectUser = (id: number) => {
+  const user = knownUsers.get(id)
+  return userRoleState.value[id] === 'ready' && !!user && !isProtectedUser(user) && userWithinCeiling(id)
+}
+async function loadUserRoleSummaries(rows: AdminUser[], signal: AbortSignal) {
+  for (const row of rows) { knownUsers.set(row.id, row); userRoleState.value[row.id] = 'loading' }
+  for (let i = 0; i < rows.length; i += 6) {
+    if (signal.aborted) return
+    await Promise.all(rows.slice(i, i + 6).map(async row => {
+      try {
+        const roles = await rbacAPI.getUserRoles(row.id)
+        if (signal.aborted) return
+        row.roles = roles ?? []
+        userRoleDetails.value[row.id] = roles ?? []
+        userRoleState.value[row.id] = 'ready'
+        if (isProtectedUser(row) || !userWithinCeiling(row.id)) removeSelectedIds([row.id])
+      } catch {
+        if (!signal.aborted) { userRoleState.value[row.id] = 'error'; removeSelectedIds([row.id]) }
+      }
+    }))
+  }
+}
 
 // Generate dynamic attribute columns from enabled definitions
 const attributeColumns = computed<Column[]>(() =>
@@ -1065,6 +1142,7 @@ const sortState = reactive(loadInitialSortState())
 // Groups data for the groups column and the existing "authorised group" filter (active only)
 const allGroups = ref<AdminGroup[]>([])
 const loadAllGroups = async () => {
+  if (!authStore.hasPermission('groups.read')) return
   if (allGroups.value.length > 0) return
   try {
     allGroups.value = await adminAPI.groups.getAll()
@@ -1077,6 +1155,7 @@ const loadAllGroups = async () => {
 // filter users whose keys are still bound to a now-disabled group.
 const allGroupsForApiKeyFilter = ref<AdminGroup[]>([])
 const loadAllGroupsForApiKeyFilter = async () => {
+  if (!authStore.hasPermission('groups.read')) return
   if (allGroupsForApiKeyFilter.value.length > 0) return
   try {
     allGroupsForApiKeyFilter.value = await adminAPI.groups.getAllIncludingInactive()
@@ -1299,8 +1378,8 @@ const getUsageValue = (userId: number, key: string, metric: UsageMetric): number
 // 稳定排序：等值按原 index 保序，避免拉取新用量数据时表行抖动。
 const sortedUsers = computed(() => {
   const s = usageSort.value
-  if (!s) return users.value
-  return [...users.value]
+  if (!s) return roleFilteredUsers.value
+  return [...roleFilteredUsers.value]
     .map((row, index) => ({ row, index }))
     .sort((a, b) => {
       const av = getUsageValue(a.row.id, s.key, s.metric)
@@ -1323,7 +1402,8 @@ const {
 })
 
 const handleSelectedKeysUpdate = (keys: Array<string | number>) => {
-  setSelectedIds(keys.filter((key): key is number => typeof key === 'number'))
+  if (!authStore.hasPermission('users.update') && !authStore.hasPermission('users.delete')) return
+  setSelectedIds(keys.filter((key): key is number => typeof key === 'number' && canSelectUser(key)))
 }
 
 const getUserSelectionLabel = (user: AdminUser) =>
@@ -1354,6 +1434,7 @@ const viewingUser = ref<AdminUser | null>(null)
 const platformQuotaUser = ref<AdminUser | null>(null)
 
 const handlePlatformQuota = (user: AdminUser) => {
+  if (!authStore.hasPermission('users.update')) return
   platformQuotaUser.value = user
   showPlatformQuotaModal.value = true
 }
@@ -1374,7 +1455,7 @@ const loadUsersSecondaryData = async (
 
   const tasks: Promise<void>[] = []
 
-  if (hasVisibleUsageColumn.value) {
+  if (hasVisibleUsageColumn.value && authStore.hasPermission('dashboard.read')) {
     tasks.push(
       (async () => {
         try {
@@ -1390,7 +1471,7 @@ const loadUsersSecondaryData = async (
     )
   }
 
-  if (attributeDefinitions.value.length > 0 && hasVisibleAttributeColumns.value) {
+  if (authStore.hasPermission('user_attributes.read') && attributeDefinitions.value.length > 0 && hasVisibleAttributeColumns.value) {
     tasks.push(
       (async () => {
         try {
@@ -1568,6 +1649,7 @@ const getDaysRemaining = (expiresAt: string): number => {
 }
 
 const loadAttributeDefinitions = async () => {
+  if (!authStore.hasPermission('user_attributes.read')) return
   try {
     attributeDefinitions.value = await adminAPI.userAttributes.listEnabledDefinitions()
   } catch (e) {
@@ -1583,6 +1665,7 @@ const handleAttributesModalClose = async () => {
 }
 
 const loadUsers = async () => {
+  if (!authStore.hasPermission('users.read')) { users.value = []; return }
   abortController?.abort()
   const currentAbortController = new AbortController()
   abortController = currentAbortController
@@ -1618,6 +1701,7 @@ const loadUsers = async () => {
       return
     }
     users.value = response.items
+    void loadUserRoleSummaries(users.value, signal)
     pagination.total = response.total
     pagination.pages = response.pages
     usageStats.value = {}
@@ -1733,6 +1817,7 @@ const applyFilter = () => {
 }
 
 const handleEdit = (user: AdminUser) => {
+  if (!authStore.hasPermission('users.update')) return
   editingUser.value = user
   showEditModal.value = true
 }
@@ -1743,6 +1828,8 @@ const closeEditModal = () => {
 }
 
 const handleToggleStatus = async (user: AdminUser) => {
+  if (!authStore.hasPermission('users.update')) return
+  if (!canSelectUser(user.id)) { appStore.showError(rt(isProtectedUser(user) ? 'rbac.protectedUser' : 'rbac.loadFailed')); return }
   const newStatus = user.status === 'active' ? 'disabled' : 'active'
   try {
     const updated = await adminAPI.users.toggleStatus(user.id, newStatus)
@@ -1767,6 +1854,7 @@ const handleToggleStatus = async (user: AdminUser) => {
 }
 
 const handleViewApiKeys = (user: AdminUser) => {
+  if (!authStore.hasPermission('api_keys.read')) return
   viewingUser.value = user
   showApiKeysModal.value = true
 }
@@ -1777,6 +1865,7 @@ const closeApiKeysModal = () => {
 }
 
 const handleAllowedGroups = (user: AdminUser) => {
+  if (!authStore.hasPermission('users.update')) return
   allowedGroupsUser.value = user
   showAllowedGroupsModal.value = true
 }
@@ -1787,6 +1876,7 @@ const closeAllowedGroupsModal = () => {
 }
 
 const openGroupReplace = (user: AdminUser, group: { id: number; name: string }) => {
+  if (!authStore.hasPermission('users.update')) return
   expandedGroupUserId.value = null
   groupReplaceUser.value = user
   groupReplaceOldGroup.value = group
@@ -1800,13 +1890,17 @@ const closeGroupReplaceModal = () => {
 }
 
 const handleDelete = (user: AdminUser) => {
+  if (!authStore.hasPermission('users.delete')) return
+  if (!canSelectUser(user.id)) { appStore.showError(rt(isProtectedUser(user) ? 'rbac.protectedUser' : 'rbac.loadFailed')); return }
   deletingUser.value = user
   showDeleteDialog.value = true
 }
 
 const confirmDelete = async () => {
-  if (!deletingUser.value) return
+  if (!deletingUser.value || !authStore.hasPermission('users.delete') || !canSelectUser(deletingUser.value.id)) return
   try {
+    const roles = await rbacAPI.getUserRoles(deletingUser.value.id)
+    if (roles.some(role => isSuperRole(role) || !withinCeiling(authStore, role))) { appStore.showError(rt('rbac.protectedUser')); return }
     await adminAPI.users.delete(deletingUser.value.id)
     appStore.showSuccess(t('common.success'))
     showDeleteDialog.value = false
@@ -1819,12 +1913,16 @@ const confirmDelete = async () => {
 }
 
 const confirmBulkDelete = async () => {
+  if (!authStore.hasPermission('users.delete') || bulkDeleting.value) return
   const ids = bulkDeleteIds.value
   bulkDeleteIds.value = []
   bulkDeleting.value = true
   const deletedIds: number[] = []
   for (const id of ids) {
     try {
+      if (!canSelectUser(id)) continue
+      const roles = await rbacAPI.getUserRoles(id)
+      if (roles.some(role => isSuperRole(role) || !withinCeiling(authStore, role))) continue
       await adminAPI.users.delete(id)
       deletedIds.push(id)
     } catch (error) {
@@ -1843,12 +1941,14 @@ const confirmBulkDelete = async () => {
 }
 
 const handleDeposit = (user: AdminUser) => {
+  if (!authStore.hasPermission('users.update')) return
   balanceUser.value = user
   balanceOperation.value = 'add'
   showBalanceModal.value = true
 }
 
 const handleWithdraw = (user: AdminUser) => {
+  if (!authStore.hasPermission('users.update')) return
   balanceUser.value = user
   balanceOperation.value = 'subtract'
   showBalanceModal.value = true
@@ -1860,6 +1960,7 @@ const closeBalanceModal = () => {
 }
 
 const handleBalanceHistory = (user: AdminUser) => {
+  if (!authStore.hasPermission('users.read')) return
   balanceHistoryUser.value = user
   showBalanceHistoryModal.value = true
 }

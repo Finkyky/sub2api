@@ -6,21 +6,25 @@
     @close="$emit('close')"
   >
     <form v-if="user" id="edit-user-form" @submit.prevent="handleUpdateUser" class="space-y-5">
+      <p v-if="protectedTarget" role="status">{{ rt('rbac.protectedUser') }}</p>
+      <p v-if="canEdit && !canEditSensitive" role="status">{{ rt('rbac.sensitiveLocked') }}</p>
+      <p v-if="!canEdit" role="status">{{ rt('rbac.readOnly') }}</p>
+      <fieldset :disabled="!canEdit || submitting" class="space-y-5" @input="basicSaved = false">
       <div>
         <label class="input-label">{{ t('admin.users.email') }}</label>
-        <input v-model="form.email" type="email" class="input" />
+        <input v-model="form.email" :disabled="!canEditSensitive" type="email" class="input" />
       </div>
       <div>
         <label class="input-label">{{ t('admin.users.password') }}</label>
         <div class="flex gap-2">
           <div class="relative flex-1">
-            <input v-model="form.password" type="text" class="input pr-10" :placeholder="t('admin.users.enterNewPassword')" />
+            <input v-model="form.password" :disabled="!canEditSensitive" type="text" class="input pr-10" :placeholder="t('admin.users.enterNewPassword')" />
             <button v-if="form.password" type="button" @click="copyPassword" class="absolute right-2 top-1/2 -translate-y-1/2 rounded-lg p-1 transition-colors hover:bg-gray-100 dark:hover:bg-dark-700" :class="passwordCopied ? 'text-green-500' : 'text-gray-400'">
               <svg v-if="passwordCopied" class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" /></svg>
               <svg v-else class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M15.666 3.888A2.25 2.25 0 0013.5 2.25h-3c-1.03 0-1.9.693-2.166 1.638m7.332 0c.055.194.084.4.084.612v0a.75.75 0 01-.75.75H9a.75.75 0 01-.75-.75v0c0-.212.03-.418.084-.612m7.332 0c.646.049 1.288.11 1.927.184 1.1.128 1.907 1.077 1.907 2.185V19.5a2.25 2.25 0 01-2.25 2.25H6.75A2.25 2.25 0 014.5 19.5V6.257c0-1.108.806-2.057 1.907-2.185a48.208 48.208 0 011.927-.184" /></svg>
             </button>
           </div>
-          <button type="button" @click="generatePassword" class="btn btn-secondary px-3">
+          <button type="button" :disabled="!canEditSensitive" @click="generatePassword" class="btn btn-secondary px-3">
             <Icon name="refresh" size="md" />
           </button>
         </div>
@@ -29,14 +33,7 @@
         <label class="input-label">{{ t('admin.users.username') }}</label>
         <input v-model="form.username" type="text" class="input" />
       </div>
-      <div>
-        <label class="input-label">{{ t('admin.users.form.roleLabel') }}</label>
-        <Select
-          v-model="form.role"
-          :options="roleOptions"
-          :searchable="false"
-        />
-      </div>
+      <UserRoleSelector ref="roleSelector" :show="show" :user="user" :disabled="submitting || !canEdit" />
       <div>
         <label class="input-label">{{ t('admin.users.notes') }}</label>
         <textarea v-model="form.notes" rows="3" class="input"></textarea>
@@ -66,19 +63,20 @@
         />
         <p class="input-hint">{{ t('admin.users.form.rpmLimitHint') }}</p>
       </div>
-      <UserAttributeForm v-model="form.customAttributes" :user-id="user?.id" />
+      </fieldset>
+      <UserAttributeForm v-if="show && canEdit && canReadAttributes" v-model="form.customAttributes" :user-id="user?.id" :disabled="submitting" @dirty="attributesDirty = true" />
     </form>
     <template #footer>
       <div class="flex justify-end gap-3">
         <button @click="$emit('close')" type="button" class="btn btn-secondary">{{ t('common.cancel') }}</button>
-        <button type="submit" form="edit-user-form" :disabled="submitting" class="btn btn-primary">
+        <button type="submit" form="edit-user-form" :disabled="submitting || !canEdit" class="btn btn-primary">
           {{ submitting ? t('admin.users.updating') : t('common.update') }}
         </button>
       </div>
     </template>
   </BaseDialog>
 
-  <!-- 角色提升为管理员时后端要求 step-up 2FA，弹出 TOTP 验证后自动重试 -->
+  <!-- 敏感用户信息更新要求 step-up 时，弹出 TOTP 验证后自动重试 -->
   <TotpStepUpDialog :controller="stepUp" />
 </template>
 
@@ -86,31 +84,39 @@
 import { computed, ref, reactive, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useAppStore } from '@/stores/app'
+import { useAuthStore } from '@/stores/auth'
+import { isProtectedUser } from '@/components/admin/rbac/policy'
+import { rbacMessages } from '@/components/admin/rbac/messages'
 import { useClipboard } from '@/composables/useClipboard'
 import { adminAPI } from '@/api/admin'
 import type { AdminUser, UserAttributeValuesMap } from '@/types'
 import BaseDialog from '@/components/common/BaseDialog.vue'
-import Select from '@/components/common/Select.vue'
+import UserRoleSelector from '@/components/admin/rbac/UserRoleSelector.vue'
 import UserAttributeForm from '@/components/user/UserAttributeForm.vue'
 import Icon from '@/components/icons/Icon.vue'
 import { useStepUp, isStepUpBlocked, isStepUpCancelled, stepUpBlockReason } from '@/composables/useStepUp'
 import TotpStepUpDialog from '@/components/auth/TotpStepUpDialog.vue'
 
-const props = defineProps<{ show: boolean, user: AdminUser | null }>()
+const props = defineProps<{ show: boolean, user: AdminUser | null, sensitiveAllowed?: boolean }>()
 const emit = defineEmits(['close', 'success'])
 const { t } = useI18n(); const appStore = useAppStore(); const { copyToClipboard } = useClipboard()
 
+const auth = useAuthStore()
+const { t: rt } = useI18n({ useScope: 'local', messages: rbacMessages })
+const protectedTarget = computed(() => !!props.user && isProtectedUser(props.user) && !auth.isSuperAdmin)
+const canEdit = computed(() => auth.hasPermission('users.update'))
+const canEditSensitive = computed(() => canEdit.value && (auth.isSuperAdmin || (!protectedTarget.value && props.sensitiveAllowed !== false)))
+const canReadAttributes = computed(() => auth.hasPermission('user_attributes.read') && auth.hasPermission('users.read'))
+const attributesDirty = ref(false)
+const basicSaved = ref(false)
 const submitting = ref(false); const passwordCopied = ref(false)
-const roleOptions = computed(() => [
-  { value: 'user', label: t('admin.users.roles.user') },
-  { value: 'admin', label: t('admin.users.roles.admin') }
-])
+const roleSelector = ref<InstanceType<typeof UserRoleSelector> | null>(null)
+
 const form = reactive({
   email: '',
   password: '',
   username: '',
   notes: '',
-  role: 'user' as AdminUser['role'],
   concurrency: 1,
   rpm_limit: 0,
   customAttributes: {} as UserAttributeValuesMap
@@ -118,12 +124,16 @@ const form = reactive({
 
 watch(() => props.user, (u) => {
   if (u) {
-    Object.assign(form, { email: u.email, password: '', username: u.username || '', notes: u.notes || '', role: u.role || 'user', concurrency: u.concurrency, rpm_limit: u.rpm_limit ?? 0, customAttributes: {} })
+    Object.assign(form, { email: u.email, password: '', username: u.username || '', notes: u.notes || '', concurrency: u.concurrency, rpm_limit: u.rpm_limit ?? 0, customAttributes: {} })
     passwordCopied.value = false
+    attributesDirty.value = false
+    basicSaved.value = false
   }
 }, { immediate: true })
 
 const generatePassword = () => {
+  if (!canEditSensitive.value) return
+  basicSaved.value = false
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789!@#$%^&*'
   let p = ''; for (let i = 0; i < 16; i++) p += chars.charAt(Math.floor(Math.random() * chars.length))
   form.password = p
@@ -136,8 +146,8 @@ const copyPassword = async () => {
 const stepUp = useStepUp()
 
 const handleUpdateUser = async () => {
-  if (!props.user) return
-  if (!form.email.trim()) {
+  if (!props.user || !canEdit.value || submitting.value) return
+  if (canEditSensitive.value && !form.email.trim()) {
     appStore.showError(t('admin.users.emailRequired'))
     return
   }
@@ -149,14 +159,52 @@ const handleUpdateUser = async () => {
   const userId = props.user.id
   submitting.value = true
   try {
-    const data: any = { email: form.email, username: form.username, notes: form.notes, role: form.role, concurrency: form.concurrency, rpm_limit: form.rpm_limit }
-    if (form.password.trim()) data.password = form.password.trim()
-    // 提升为管理员属敏感操作：后端返回 STEP_UP_REQUIRED 时弹 TOTP 验证并重试
-    await stepUp.run(() => adminAPI.users.update(userId, data))
-    if (Object.keys(form.customAttributes).length > 0) await adminAPI.userAttributes.updateUserAttributeValues(userId, form.customAttributes)
+    roleSelector.value?.validate()
+    const data: Record<string, unknown> = { username: form.username, notes: form.notes, concurrency: form.concurrency, rpm_limit: form.rpm_limit }
+
+    // 敏感用户信息更新：后端返回 STEP_UP_REQUIRED 时弹 TOTP 验证并重试
+    if (!basicSaved.value) {
+      await stepUp.run(() => {
+        if (props.user?.id !== userId || !props.show) throw new Error(rt('rbac.loadFailed'))
+        if (!canEdit.value) throw new Error(rt('rbac.readOnly'))
+        // RBAC assignments are saved separately as role IDs; never submit legacy user.role.
+        const sensitive: { email?: string; password?: string } = {}
+        if (canEditSensitive.value) {
+          if (form.email.trim() !== props.user?.email) sensitive.email = form.email.trim()
+          if (form.password.trim()) sensitive.password = form.password.trim()
+        }
+        return adminAPI.users.update(userId, { ...data, ...sensitive })
+      })
+      if (props.user?.id !== userId || !props.show) return
+      basicSaved.value = true
+    }
+    if (props.user?.id !== userId || !props.show) return
+    if (attributesDirty.value && canReadAttributes.value && canEdit.value) {
+      try {
+        await adminAPI.userAttributes.updateUserAttributeValues(userId, form.customAttributes)
+        if (props.user?.id !== userId || !props.show) return
+        attributesDirty.value = false
+      } catch {
+        if (props.user?.id !== userId || !props.show) return
+        appStore.showError(rt('rbac.attributesPartialSave'))
+        emit('success')
+        return
+      }
+    }
+    if (props.user?.id !== userId || !props.show) return
+    try {
+      await roleSelector.value?.save()
+    } catch {
+      if (props.user?.id !== userId || !props.show) return
+      appStore.showError(rt('rbac.rolesPartialSave'))
+      emit('success')
+      return
+    }
+    if (props.user?.id !== userId || !props.show) return
     appStore.showSuccess(t('admin.users.userUpdated'))
     emit('success'); emit('close')
   } catch (e: any) {
+    if (props.user?.id !== userId || !props.show) return
     if (isStepUpCancelled(e)) {
       // 用户主动取消二次验证：静默返回，表单保持打开。
     } else if (isStepUpBlocked(e)) {

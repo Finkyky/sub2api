@@ -25,6 +25,7 @@
 </template>
 
 <script setup lang="ts">
+import { useAuthStore } from '@/stores/auth'
 import { reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useAppStore } from '@/stores/app'
@@ -32,6 +33,8 @@ import { adminAPI } from '@/api/admin'
 import { extractApiErrorMessage } from '@/utils/apiError'
 import type { AdminUser } from '@/types'
 import BaseDialog from '@/components/common/BaseDialog.vue'
+
+const auth = useAuthStore()
 
 const props = defineProps<{ show: boolean, user: AdminUser | null, operation: 'add' | 'subtract' }>()
 const emit = defineEmits(['close', 'success']); const { t } = useI18n(); const appStore = useAppStore()
@@ -65,7 +68,7 @@ const calculateNewBalance = () => {
   return Math.abs(result) < 1e-10 ? 0 : result
 }
 const handleBalanceSubmit = async () => {
-  if (!props.user) return
+  if (!props.user || submitting.value || !auth.hasPermission('users.update')) return
   if (!form.amount || form.amount <= 0) {
     appStore.showError(t('admin.users.amountRequired'))
     return

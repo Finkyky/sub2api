@@ -36,6 +36,8 @@ import riskControlAPI from './riskControl'
 import adminComplianceAPI from './compliance'
 import auditAPI from './audit'
 import pluginsAPI from './plugins'
+import pluginInstancesAPI from './pluginInstances'
+import pluginTasksAPI, { pluginRunsAPI } from './pluginTasks'
 
 /**
  * Unified admin API object for convenient access
@@ -73,7 +75,10 @@ export const adminAPI = {
   riskControl: riskControlAPI,
   compliance: adminComplianceAPI,
   audit: auditAPI,
-  plugins: pluginsAPI
+  plugins: pluginsAPI,
+  pluginInstances: pluginInstancesAPI,
+  pluginTasks: pluginTasksAPI,
+  pluginRuns: pluginRunsAPI
 }
 
 export {
@@ -109,7 +114,10 @@ export {
   riskControlAPI,
   adminComplianceAPI,
   auditAPI,
-  pluginsAPI
+  pluginsAPI,
+  pluginInstancesAPI,
+  pluginTasksAPI,
+  pluginRunsAPI
 }
 
 export default adminAPI
@@ -127,3 +135,7 @@ export type {
   PluginUISession,
   PluginTestResult
 } from './plugins'
+
+export type { PluginInstance, PluginInstanceDetail, PluginInstanceRevision, PluginGroupBinding } from './pluginInstances'
+
+export type { PluginTask, PluginTaskScope, PluginRun, CreatePluginTask, UpdatePluginTask, SensitivePluginRun, TaskResult } from './pluginTasks'

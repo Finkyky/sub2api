@@ -36,10 +36,10 @@
             >
               <Icon name="refresh" size="md" :class="loading ? 'animate-spin' : ''" />
             </button>
-            <button @click="handleExportCodes" class="btn btn-secondary">
+            <button v-permission="'redeem_codes.export'" @click="handleExportCodes" class="btn btn-secondary">
               {{ t('admin.redeem.exportCsv') }}
             </button>
-            <button
+            <button v-permission="'redeem_codes.update'"
               data-test="batch-update-open"
               @click="openBatchUpdateDialog"
               :disabled="selectedCount === 0 || batchUpdating"
@@ -48,7 +48,7 @@
               <Icon name="edit" size="md" class="mr-2" />
               {{ t('admin.redeem.batchUpdate') }}
             </button>
-            <button @click="showGenerateDialog = true" class="btn btn-primary">
+            <button v-permission="'redeem_codes.create'" @click="showGenerateDialog = true" class="btn btn-primary">
               {{ t('admin.redeem.generateCodes') }}
             </button>
           </div>
@@ -183,7 +183,7 @@
 
           <template #cell-actions="{ row }">
             <div class="flex items-center space-x-2">
-              <button
+              <button v-permission="'redeem_codes.delete'"
                 v-if="row.status === 'unused'"
                 @click="handleDelete(row)"
                 class="flex flex-col items-center gap-0.5 rounded-lg p-1.5 text-gray-500 transition-colors hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-900/20 dark:hover:text-red-400"
@@ -220,7 +220,7 @@
             >
               {{ t('admin.redeem.clearSelection') }}
             </button>
-            <button
+            <button v-permission="'redeem_codes.update'"
               type="button"
               class="btn btn-primary btn-sm"
               @click="openBatchUpdateDialog"
@@ -241,7 +241,7 @@
 
         <!-- Batch Actions -->
         <div v-if="filters.status === 'unused'" class="flex justify-end">
-          <button @click="showDeleteUnusedDialog = true" class="btn btn-danger">
+          <button v-permission="'redeem_codes.delete'" @click="showDeleteUnusedDialog = true" class="btn btn-danger">
             {{ t('admin.redeem.deleteAllUnused') }}
           </button>
         </div>
@@ -249,7 +249,7 @@
     </TablePageLayout>
 
     <!-- Delete Confirmation Dialog -->
-    <ConfirmDialog
+    <ConfirmDialog v-if="can('redeem_codes.delete')"
       :show="showDeleteDialog"
       :title="t('admin.redeem.deleteCode')"
       :message="t('admin.redeem.deleteCodeConfirm')"
@@ -261,7 +261,7 @@
     />
 
     <!-- Delete Unused Codes Dialog -->
-    <ConfirmDialog
+    <ConfirmDialog v-if="can('redeem_codes.delete')"
       :show="showDeleteUnusedDialog"
       :title="t('admin.redeem.deleteAllUnused')"
       :message="t('admin.redeem.deleteAllUnusedConfirm')"
@@ -282,7 +282,7 @@
           <h2 class="mb-4 text-lg font-semibold text-gray-900 dark:text-white">
             {{ t('admin.redeem.generateCodesTitle') }}
           </h2>
-          <form @submit.prevent="handleGenerateCodes" class="space-y-4">
+          <form v-permission="'redeem_codes.create'" @submit.prevent="handleGenerateCodes" class="space-y-4">
             <div>
               <label class="input-label">{{ t('admin.redeem.codeType') }}</label>
               <Select v-model="generateForm.type" :options="typeOptions" />
@@ -400,7 +400,7 @@
               <button type="button" @click="showGenerateDialog = false" class="btn btn-secondary">
                 {{ t('common.cancel') }}
               </button>
-              <button type="submit" :disabled="generating" class="btn btn-primary">
+              <button v-permission="'redeem_codes.create'" type="submit" :disabled="generating" class="btn btn-primary">
                 {{ generating ? t('admin.redeem.generating') : t('admin.redeem.generate') }}
               </button>
             </div>
@@ -426,7 +426,7 @@
             {{ t('admin.redeem.selectedCount', { count: selectedCount }) }}
           </p>
 
-          <form data-test="batch-update-form" class="space-y-4" @submit.prevent="handleBatchUpdate">
+          <form v-permission="'redeem_codes.update'" data-test="batch-update-form" class="space-y-4" @submit.prevent="handleBatchUpdate">
             <div class="space-y-2">
               <label class="flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-300">
                 <input
@@ -509,7 +509,7 @@
               <button type="button" @click="closeBatchUpdateDialog" class="btn btn-secondary">
                 {{ t('common.cancel') }}
               </button>
-              <button
+              <button v-permission="'redeem_codes.update'"
                 data-test="batch-update-submit"
                 type="submit"
                 :disabled="batchUpdating"
@@ -581,7 +581,7 @@
           <div
             class="flex justify-end gap-2 rounded-b-xl border-t border-gray-200 bg-gray-50 px-5 py-4 dark:border-dark-600 dark:bg-dark-700/50"
           >
-            <button
+            <button v-permission="'redeem_codes.export'"
               @click="copyGeneratedCodes"
               :class="[
                 'btn flex items-center gap-2 transition-all',
@@ -599,7 +599,7 @@
               </svg>
               {{ copiedAll ? t('admin.redeem.copied') : t('admin.redeem.copyAll') }}
             </button>
-            <button @click="downloadGeneratedCodes" class="btn btn-primary flex items-center gap-2">
+            <button v-permission="'redeem_codes.export'" @click="downloadGeneratedCodes" class="btn btn-primary flex items-center gap-2">
               <Icon name="download" size="sm" :stroke-width="2" />
               {{ t('admin.redeem.download') }}
             </button>
@@ -611,6 +611,8 @@
 </template>
 
 <script setup lang="ts">
+import { usePermission } from '@/composables/usePermission'
+const { can } = usePermission()
 import { ref, reactive, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useAppStore } from '@/stores/app'

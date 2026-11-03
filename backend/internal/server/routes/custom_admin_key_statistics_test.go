@@ -139,7 +139,7 @@ func TestScopedAdminRegisteredStatisticsAndOpenAIRoutes(t *testing.T) {
 				key, _, err := settings.CreateScopedAdminKey(context.Background(), service.ScopedAdminKeyInput{Name: "统计路由", Enabled: true, Policy: policy}, 9)
 				require.NoError(t, err)
 				users := service.NewUserService(&scopedRouteUsers{}, nil, nil, nil)
-				auth := middleware.NewAdminAuthMiddleware(nil, users, settings, nil)
+				auth := middleware.NewAdminAuthMiddleware(nil, users, settings, nil, nil)
 				admin := &scopedRouteStatisticsAccounts{scopedRouteAccounts: scopedRouteAccounts{t: t}}
 				repo := &scopedRouteStatisticsRepo{admin: admin}
 				logs := &scopedRouteStatisticsLogs{}
@@ -173,7 +173,7 @@ func TestScopedAdminRegisteredStatisticsAndOpenAIRoutes(t *testing.T) {
 				openai := adminhandler.NewOpenAIOAuthHandler(nil, admin, quota, nil)
 				groups := adminhandler.NewGroupHandler(admin, nil, service.NewGroupCapacityService(repo, &scopedRouteCapacityGroups{}, nil, nil, nil))
 				router := gin.New()
-				RegisterAdminRoutes(router.Group("/api/v1"), &handler.Handlers{Admin: &handler.AdminHandlers{Account: accounts, OpenAIOAuth: openai, Group: groups}}, auth, middleware.AuditLogMiddleware(func(c *gin.Context) { c.Next() }), middleware.StepUpAuthMiddleware(func(c *gin.Context) { c.Next() }), nil, nil)
+				RegisterAdminRoutes(router.Group("/api/v1"), &handler.Handlers{Admin: &handler.AdminHandlers{Account: accounts, OpenAIOAuth: openai, Group: groups}}, auth, middleware.AuditLogMiddleware(func(c *gin.Context) { c.Next() }), middleware.StepUpAuthMiddleware(func(c *gin.Context) { c.Next() }), nil, nil, allowAllRoutePermissionChecker{})
 				request := httptest.NewRequest(tc.method, "/api/v1/admin"+tc.path, strings.NewReader(tc.body))
 				request.Header.Set("x-api-key", key)
 				request.Header.Set("Content-Type", "application/json")

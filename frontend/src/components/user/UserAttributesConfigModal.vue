@@ -1,12 +1,13 @@
 <template>
   <BaseDialog :show="show" :title="t('admin.users.attributes.title')" width="wide" @close="emit('close')">
-    <div class="space-y-4">
+    <p v-if="!auth.hasPermission('user_attributes.read')" role="status">{{ rt('rbac.directoryUnavailable') }}</p>
+    <div v-else class="space-y-4">
       <!-- Header with Add Button -->
       <div class="flex items-center justify-between">
         <p class="text-sm text-gray-500 dark:text-dark-400">
           {{ t('admin.users.attributes.description') }}
         </p>
-        <button @click="openCreateModal" class="btn btn-primary btn-sm">
+        <button v-if="canManage" @click="openCreateModal" class="btn btn-primary btn-sm">
           <Icon name="plus" size="sm" class="mr-1.5" :stroke-width="2" />
           {{ t('admin.users.attributes.addAttribute') }}
         </button>
@@ -69,14 +70,14 @@
           <!-- Actions -->
           <div class="flex items-center gap-1">
             <button
-              @click="openEditModal(attr)"
+              v-if="canManage" @click="openEditModal(attr)"
               class="rounded-lg p-1.5 text-gray-500 hover:bg-gray-100 hover:text-primary-600 dark:hover:bg-dark-700 dark:hover:text-primary-400"
               :title="t('common.edit')"
             >
               <Icon name="edit" size="sm" />
             </button>
             <button
-              @click="confirmDelete(attr)"
+              v-if="canManage" @click="confirmDelete(attr)"
               class="rounded-lg p-1.5 text-gray-500 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-900/20 dark:hover:text-red-400"
               :title="t('common.delete')"
             >
@@ -212,7 +213,7 @@
         <button @click="closeEditModal" type="button" class="btn btn-secondary">
           {{ t('common.cancel') }}
         </button>
-        <button type="submit" form="attribute-form" :disabled="saving" class="btn btn-primary">
+        <button type="submit" form="attribute-form" :disabled="saving || !canManage" class="btn btn-primary">
           <svg v-if="saving" class="-ml-1 mr-2 h-4 w-4 animate-spin" fill="none" viewBox="0 0 24 24">
             <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
             <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
@@ -237,9 +238,11 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, watch } from 'vue'
+import { computed, ref, reactive, watch, onBeforeUnmount } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useAppStore } from '@/stores/app'
+import { useAuthStore } from '@/stores/auth'
+import { rbacMessages } from '@/components/admin/rbac/messages'
 import { adminAPI } from '@/api/admin'
 import type { UserAttributeDefinition, UserAttributeType, UserAttributeOption } from '@/types'
 import BaseDialog from '@/components/common/BaseDialog.vue'
@@ -250,6 +253,10 @@ import { createStableObjectKeyResolver } from '@/utils/stableObjectKey'
 
 const { t } = useI18n()
 const appStore = useAppStore()
+const auth = useAuthStore()
+const { t: rt } = useI18n({ useScope: 'local', messages: rbacMessages })
+const canManage = computed(() => auth.hasPermission('user_attributes.manage') && auth.hasPermission('user_attributes.read'))
+let generation = 0
 
 interface Props {
   show: boolean
@@ -285,17 +292,22 @@ const form = reactive({
 })
 
 const loadAttributes = async () => {
+  const seq = ++generation
+  loading.value = false; attributes.value = []
+  if (!props.show || !auth.hasPermission('user_attributes.read')) return
   loading.value = true
   try {
-    attributes.value = await adminAPI.userAttributes.listDefinitions()
+    const data = await adminAPI.userAttributes.listDefinitions()
+    if (seq === generation) attributes.value = data
   } catch (error: any) {
-    appStore.showError(error.response?.data?.detail || t('admin.users.attributes.failedToLoad'))
+    if (seq === generation) appStore.showError(error.response?.data?.detail || t('admin.users.attributes.failedToLoad'))
   } finally {
-    loading.value = false
+    if (seq === generation) loading.value = false
   }
 }
 
 const openCreateModal = () => {
+  if (!canManage.value || saving.value) return
   editingAttribute.value = null
   form.key = ''
   form.name = ''
@@ -309,6 +321,7 @@ const openCreateModal = () => {
 }
 
 const openEditModal = (attr: UserAttributeDefinition) => {
+  if (!canManage.value || saving.value) return
   editingAttribute.value = attr
   form.key = attr.key
   form.name = attr.name
@@ -335,6 +348,7 @@ const removeOption = (index: number) => {
 }
 
 const handleSave = async () => {
+  if (!canManage.value || saving.value) return
   if (!form.key.trim()) {
     appStore.showError(t('admin.users.attributes.keyRequired'))
     return
@@ -381,12 +395,14 @@ const handleSave = async () => {
 }
 
 const confirmDelete = (attr: UserAttributeDefinition) => {
+  if (!canManage.value || saving.value) return
   deletingAttribute.value = attr
   showDeleteDialog.value = true
 }
 
 const handleDelete = async () => {
-  if (!deletingAttribute.value) return
+  if (!deletingAttribute.value || !canManage.value || saving.value) return
+  saving.value = true
 
   try {
     await adminAPI.userAttributes.deleteDefinition(deletingAttribute.value.id)
@@ -396,12 +412,10 @@ const handleDelete = async () => {
     loadAttributes()
   } catch (error: any) {
     appStore.showError(error.response?.data?.detail || t('admin.users.attributes.failedToDelete'))
-  }
+  } finally { saving.value = false }
 }
 
-watch(() => props.show, (isShow) => {
-  if (isShow) {
-    loadAttributes()
-  }
-})
+watch(() => [props.show, auth.hasPermission('user_attributes.read')], loadAttributes, { immediate: true })
+watch(canManage, allowed => { if (!allowed) { showEditModal.value = false; showDeleteDialog.value = false } })
+onBeforeUnmount(() => { generation++ })
 </script>

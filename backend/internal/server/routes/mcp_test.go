@@ -35,7 +35,7 @@ func TestMCPToolCatalogTargetsRegisteredManagementRoutes(t *testing.T) {
 	h := mcpRouteHandlers()
 	require.NotPanics(t, func() {
 		RegisterUserRoutes(v1, h, middleware.JWTAuthMiddleware(mcpRouteNext), middleware.AuditLogMiddleware(mcpRouteNext), nil, nil)
-		RegisterAdminRoutes(v1, h, middleware.AdminAuthMiddleware(mcpRouteNext), middleware.AuditLogMiddleware(mcpRouteNext), middleware.StepUpAuthMiddleware(mcpRouteNext), nil, nil)
+		RegisterAdminRoutes(v1, h, middleware.AdminAuthMiddleware(mcpRouteNext), middleware.AuditLogMiddleware(mcpRouteNext), middleware.StepUpAuthMiddleware(mcpRouteNext), nil, nil, allowAllRoutePermissionChecker{})
 	})
 	registered := map[string]bool{}
 	for _, route := range router.Routes() {
@@ -72,7 +72,7 @@ func newMCPRouteTestEndpoint(h *handler.Handlers, principal *service.MCPPrincipa
 	inner := gin.New()
 	v1 := inner.Group("/api/v1")
 	RegisterUserRoutes(v1, h, middleware.JWTAuthMiddleware(managementmcp.DispatchAuth(false)), audit, settings, nil)
-	RegisterAdminRoutes(v1, h, middleware.AdminAuthMiddleware(managementmcp.DispatchAuth(true)), audit, middleware.StepUpAuthMiddleware(mcpRouteNext), settings, nil)
+	RegisterAdminRoutes(v1, h, middleware.AdminAuthMiddleware(managementmcp.DispatchAuth(true)), audit, middleware.StepUpAuthMiddleware(mcpRouteNext), settings, nil, mcpAllowChecker{})
 	outer := gin.New()
 	outer.POST("/api/v1/mcp", managementmcp.Authenticate(mcpRouteTokenAuth{principal: principal}, nil, h.MCPOAuth.ResourceURL), gin.WrapH(managementmcp.NewHandler(inner, nil)))
 	return outer
@@ -183,6 +183,13 @@ func (r *mcpRouteSettingsRepo) SetMultiple(_ context.Context, values map[string]
 		r.values[key] = value
 	}
 	return nil
+}
+
+type mcpAllowChecker struct{}
+
+func (mcpAllowChecker) HasPermission(context.Context, int64, string) (bool, error) { return true, nil }
+func (mcpAllowChecker) Snapshot(context.Context, int64) (service.RBACSnapshot, error) {
+	return service.RBACSnapshot{IsSuperAdmin: true}, nil
 }
 
 func TestMCPDispatchRetainsBackendModeAndAdminCompliance(t *testing.T) {

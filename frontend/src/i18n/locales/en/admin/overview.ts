@@ -1167,6 +1167,15 @@ export default {
           duplicate: 'This entry already exists'
         }
       },
+      resultCache: {
+  "title": "Response result cache",
+  "hint": "Clients opt in explicitly. Identical complete non-streaming Chat requests can reuse an answer without another upstream call. Hits have no additional generation charge.",
+  "ttl": "Valid for (seconds)",
+  "maxBytes": "Maximum response size (bytes)",
+  "sharing": "Allow explicit group-wide sharing",
+  "sharingHint": "Off by default: isolated by user and API key. Enable only for public content; clients must also request scope=group.",
+  "invalid": "Cache TTL must be 1-86400 seconds and size must be 1024-2097152 bytes."
+},
       codexModelsManifest: {
         title: 'Pinned Accounts for Model Lists',
         hint: 'When enabled, ordinary model lists and Codex Model Manifest are discovered from the pinned accounts first, then merged and filtered using account mappings and the group model list. Rate-limited or overloaded pinned accounts are still used.',

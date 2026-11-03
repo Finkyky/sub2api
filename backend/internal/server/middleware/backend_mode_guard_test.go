@@ -97,10 +97,10 @@ func TestBackendModeUserGuard(t *testing.T) {
 			wantStatus: http.StatusOK,
 		},
 		{
-			name:       "enabled_admin_allowed",
+			name:       "enabled_legacy_admin_without_snapshot_blocked",
 			enabled:    "true",
 			role:       stringPtr("admin"),
-			wantStatus: http.StatusOK,
+			wantStatus: http.StatusForbidden,
 		},
 		{
 			name:       "enabled_user_blocked",

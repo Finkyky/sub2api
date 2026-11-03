@@ -91,8 +91,12 @@ const (
 	EdgePendingAuthSessions = "pending_auth_sessions"
 	// EdgePlatformQuotas holds the string denoting the platform_quotas edge name in mutations.
 	EdgePlatformQuotas = "platform_quotas"
+	// EdgeRoles holds the string denoting the roles edge name in mutations.
+	EdgeRoles = "roles"
 	// EdgeUserAllowedGroups holds the string denoting the user_allowed_groups edge name in mutations.
 	EdgeUserAllowedGroups = "user_allowed_groups"
+	// EdgeUserRoles holds the string denoting the user_roles edge name in mutations.
+	EdgeUserRoles = "user_roles"
 	// Table holds the table name of the user in the database.
 	Table = "users"
 	// APIKeysTable is the table that holds the api_keys relation/edge.
@@ -184,6 +188,11 @@ const (
 	PlatformQuotasInverseTable = "user_platform_quotas"
 	// PlatformQuotasColumn is the table column denoting the platform_quotas relation/edge.
 	PlatformQuotasColumn = "user_id"
+	// RolesTable is the table that holds the roles relation/edge. The primary key declared below.
+	RolesTable = "user_roles"
+	// RolesInverseTable is the table name for the Role entity.
+	// It exists in this package in order to avoid circular dependency with the "role" package.
+	RolesInverseTable = "roles"
 	// UserAllowedGroupsTable is the table that holds the user_allowed_groups relation/edge.
 	UserAllowedGroupsTable = "user_allowed_groups"
 	// UserAllowedGroupsInverseTable is the table name for the UserAllowedGroup entity.
@@ -191,6 +200,13 @@ const (
 	UserAllowedGroupsInverseTable = "user_allowed_groups"
 	// UserAllowedGroupsColumn is the table column denoting the user_allowed_groups relation/edge.
 	UserAllowedGroupsColumn = "user_id"
+	// UserRolesTable is the table that holds the user_roles relation/edge.
+	UserRolesTable = "user_roles"
+	// UserRolesInverseTable is the table name for the UserRole entity.
+	// It exists in this package in order to avoid circular dependency with the "userrole" package.
+	UserRolesInverseTable = "user_roles"
+	// UserRolesColumn is the table column denoting the user_roles relation/edge.
+	UserRolesColumn = "user_id"
 )
 
 // Columns holds all SQL columns for user fields.
@@ -227,6 +243,9 @@ var (
 	// AllowedGroupsPrimaryKey and AllowedGroupsColumn2 are the table columns denoting the
 	// primary key for the allowed_groups relation (M2M).
 	AllowedGroupsPrimaryKey = []string{"user_id", "group_id"}
+	// RolesPrimaryKey and RolesColumn2 are the table columns denoting the
+	// primary key for the roles relation (M2M).
+	RolesPrimaryKey = []string{"user_id", "role_id"}
 )
 
 // ValidColumn reports if the column name is valid (part of the table columns).
@@ -612,6 +631,20 @@ func ByPlatformQuotas(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
 	}
 }
 
+// ByRolesCount orders the results by roles count.
+func ByRolesCount(opts ...sql.OrderTermOption) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborsCount(s, newRolesStep(), opts...)
+	}
+}
+
+// ByRoles orders the results by roles terms.
+func ByRoles(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborTerms(s, newRolesStep(), append([]sql.OrderTerm{term}, terms...)...)
+	}
+}
+
 // ByUserAllowedGroupsCount orders the results by user_allowed_groups count.
 func ByUserAllowedGroupsCount(opts ...sql.OrderTermOption) OrderOption {
 	return func(s *sql.Selector) {
@@ -623,6 +656,20 @@ func ByUserAllowedGroupsCount(opts ...sql.OrderTermOption) OrderOption {
 func ByUserAllowedGroups(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
 	return func(s *sql.Selector) {
 		sqlgraph.OrderByNeighborTerms(s, newUserAllowedGroupsStep(), append([]sql.OrderTerm{term}, terms...)...)
+	}
+}
+
+// ByUserRolesCount orders the results by user_roles count.
+func ByUserRolesCount(opts ...sql.OrderTermOption) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborsCount(s, newUserRolesStep(), opts...)
+	}
+}
+
+// ByUserRoles orders the results by user_roles terms.
+func ByUserRoles(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborTerms(s, newUserRolesStep(), append([]sql.OrderTerm{term}, terms...)...)
 	}
 }
 func newAPIKeysStep() *sqlgraph.Step {
@@ -716,10 +763,24 @@ func newPlatformQuotasStep() *sqlgraph.Step {
 		sqlgraph.Edge(sqlgraph.O2M, false, PlatformQuotasTable, PlatformQuotasColumn),
 	)
 }
+func newRolesStep() *sqlgraph.Step {
+	return sqlgraph.NewStep(
+		sqlgraph.From(Table, FieldID),
+		sqlgraph.To(RolesInverseTable, FieldID),
+		sqlgraph.Edge(sqlgraph.M2M, false, RolesTable, RolesPrimaryKey...),
+	)
+}
 func newUserAllowedGroupsStep() *sqlgraph.Step {
 	return sqlgraph.NewStep(
 		sqlgraph.From(Table, FieldID),
 		sqlgraph.To(UserAllowedGroupsInverseTable, UserAllowedGroupsColumn),
 		sqlgraph.Edge(sqlgraph.O2M, true, UserAllowedGroupsTable, UserAllowedGroupsColumn),
+	)
+}
+func newUserRolesStep() *sqlgraph.Step {
+	return sqlgraph.NewStep(
+		sqlgraph.From(Table, FieldID),
+		sqlgraph.To(UserRolesInverseTable, FieldID),
+		sqlgraph.Edge(sqlgraph.O2M, true, UserRolesTable, UserRolesColumn),
 	)
 }

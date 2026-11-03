@@ -69,13 +69,13 @@ func TestScopedAdminUserResponsesRequireIndependentPermissions(t *testing.T) {
 				Name: "用户字段权限", Enabled: true, Policy: adminaccess.Policy{GlobalPermissions: tc.permissions},
 			}, 9)
 			require.NoError(t, err)
-			auth := middleware.NewAdminAuthMiddleware(nil, service.NewUserService(&scopedRouteUsers{}, nil, nil, nil), settings, nil)
+			auth := middleware.NewAdminAuthMiddleware(nil, service.NewUserService(&scopedRouteUsers{}, nil, nil, nil), settings, nil, nil)
 			stub := &scopedUserResponses{}
 			r := gin.New()
 			RegisterAdminRoutes(r.Group("/api/v1"), &handler.Handlers{Admin: &handler.AdminHandlers{
 				Account: &adminhandler.AccountHandler{}, User: adminhandler.NewUserHandler(stub, nil, nil, nil, nil, nil, nil),
 				Setting: adminhandler.NewSettingHandler(settings, nil, nil, nil, nil, nil, nil),
-			}}, auth, middleware.AuditLogMiddleware(func(c *gin.Context) { c.Next() }), middleware.StepUpAuthMiddleware(func(c *gin.Context) { c.Next() }), nil, nil)
+			}}, auth, middleware.AuditLogMiddleware(func(c *gin.Context) { c.Next() }), middleware.StepUpAuthMiddleware(func(c *gin.Context) { c.Next() }), nil, nil, allowAllRoutePermissionChecker{})
 			paths := []string{"/users", "/users?include_subscriptions=true", "/users/7", "/users/7?include_deleted=true"}
 			balanceWrite := tc.name == "仅余额写入"
 			if balanceWrite {

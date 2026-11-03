@@ -21,7 +21,7 @@
           >
             <Icon name="refresh" size="sm" :class="loading ? 'animate-spin' : ''" />
           </button>
-          <button
+          <button v-permission="'payments.configure'"
             type="button"
             @click="emit('create')"
             :disabled="!canCreate"
@@ -47,12 +47,13 @@
         v-if="providers.length"
         v-model="localProviders"
         :animation="200"
+        :disabled="!can('payments.configure')"
         handle=".drag-handle"
         class="space-y-3"
         @end="onDragEnd"
       >
         <div v-for="p in localProviders" :key="p.id" class="flex items-start gap-2">
-          <div class="drag-handle mt-3 flex cursor-grab items-center text-gray-300 hover:text-gray-500 active:cursor-grabbing dark:text-dark-600 dark:hover:text-dark-400">
+          <div v-permission="'payments.configure'" class="drag-handle mt-3 flex cursor-grab items-center text-gray-300 hover:text-gray-500 active:cursor-grabbing dark:text-dark-600 dark:hover:text-dark-400">
             <svg class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
               <path d="M7 2a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM13 2a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM7 8a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM13 8a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM7 14a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM13 14a2 2 0 1 0 0 4 2 2 0 0 0 0-4z"/>
             </svg>
@@ -78,7 +79,7 @@
             ? t('admin.settings.payment.noProviders')
             : t('admin.settings.payment.enableTypesFirst') }}
         </p>
-        <button
+        <button v-permission="'payments.configure'"
           type="button"
           v-if="canCreate"
           @click="emit('create')"
@@ -92,6 +93,8 @@
 </template>
 
 <script setup lang="ts">
+import { usePermission } from '@/composables/usePermission'
+const { can } = usePermission()
 import { ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { VueDraggable } from 'vue-draggable-plus'
@@ -129,6 +132,7 @@ watch(() => props.providers, (val) => {
 }, { immediate: true })
 
 function onDragEnd() {
+  if (!can('payments.configure')) return
   const updates = localProviders.value.map((p, idx) => ({
     id: p.id,
     sort_order: idx,

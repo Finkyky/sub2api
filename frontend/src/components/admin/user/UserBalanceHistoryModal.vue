@@ -1,6 +1,6 @@
 <template>
   <BaseDialog :show="show" :title="t('admin.users.balanceHistoryTitle')" width="wide" :close-on-click-outside="true" :z-index="40" @close="$emit('close')">
-    <div v-if="user" class="space-y-4">
+    <div v-if="user && auth.hasPermission('users.read')" class="space-y-4">
       <!-- User header: two-row layout with full user info -->
       <div class="rounded-xl bg-gray-50 p-4 dark:bg-dark-700">
         <!-- Row 1: avatar + email/username/created_at (left) + current balance (right) -->
@@ -57,8 +57,8 @@
         />
         <!-- Deposit button - matches menu style -->
         <button
-          v-if="!hideActions"
-          @click="emit('deposit')"
+          v-if="!hideActions && auth.hasPermission('users.update')"
+          @click="auth.hasPermission('users.update') && emit('deposit')"
           class="flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 transition-colors hover:bg-gray-50 dark:border-dark-600 dark:bg-dark-800 dark:text-gray-300 dark:hover:bg-dark-700"
         >
           <Icon name="plus" size="sm" class="text-emerald-500" :stroke-width="2" />
@@ -66,8 +66,8 @@
         </button>
         <!-- Withdraw button - matches menu style -->
         <button
-          v-if="!hideActions"
-          @click="emit('withdraw')"
+          v-if="!hideActions && auth.hasPermission('users.update')"
+          @click="auth.hasPermission('users.update') && emit('withdraw')"
           class="flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 transition-colors hover:bg-gray-50 dark:border-dark-600 dark:bg-dark-800 dark:text-gray-300 dark:hover:bg-dark-700"
         >
           <svg class="h-4 w-4 text-amber-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -172,7 +172,8 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, onUnmounted } from 'vue'
+import { useAuthStore } from '@/stores/auth'
+import { ref, computed, watch, onBeforeUnmount } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { adminAPI, type BalanceHistoryItem } from '@/api/admin'
 import { formatDateTime } from '@/utils/format'
@@ -180,6 +181,8 @@ import type { AdminUser } from '@/types'
 import BaseDialog from '@/components/common/BaseDialog.vue'
 import Select from '@/components/common/Select.vue'
 import Icon from '@/components/icons/Icon.vue'
+
+const auth = useAuthStore()
 
 const props = defineProps<{ show: boolean; user: AdminUser | null; hideActions?: boolean }>()
 const emit = defineEmits(['close', 'deposit', 'withdraw'])
@@ -192,9 +195,6 @@ const total = ref(0)
 const totalRecharged = ref(0)
 const pageSize = 15
 const typeFilter = ref('')
-let requestVersion = 0
-
-onUnmounted(() => { requestVersion++ })
 
 const totalPages = computed(() => Math.ceil(total.value / pageSize) || 1)
 
@@ -209,18 +209,11 @@ const typeOptions = computed(() => [
   { value: 'subscription', label: t('admin.users.typeSubscription') }
 ])
 
-// Watch modal open
-watch(() => props.show, (v) => {
-  requestVersion++
-  if (v && props.user) {
-    typeFilter.value = ''
-    loadHistory(1)
-  }
-})
-
+let generation = 0
 const loadHistory = async (page: number) => {
-  if (!props.user) return
-  const version = ++requestVersion
+  const seq = ++generation
+  history.value = []; total.value = 0; totalRecharged.value = 0; loading.value = false
+  if (!props.show || !props.user || !auth.hasPermission('users.read')) return
   loading.value = true
   currentPage.value = page
   try {
@@ -230,17 +223,20 @@ const loadHistory = async (page: number) => {
       pageSize,
       typeFilter.value || undefined
     )
-    if (version !== requestVersion) return
+    if (seq !== generation) return
     history.value = res.items || []
     total.value = res.total || 0
     totalRecharged.value = res.total_recharged || 0
   } catch (error) {
-    if (version !== requestVersion) return
+    if (seq !== generation) return
     console.error('Failed to load balance history:', error)
   } finally {
-    if (version === requestVersion) loading.value = false
+    if (seq === generation) loading.value = false
   }
 }
+
+watch(() => [props.show, props.user?.id, auth.hasPermission('users.read')], () => { typeFilter.value = ''; void loadHistory(1) }, { immediate: true })
+onBeforeUnmount(() => { generation++ })
 
 // Helper: check if admin type
 const isAdminType = (type: string) => type === 'admin_balance' || type === 'admin_concurrency'

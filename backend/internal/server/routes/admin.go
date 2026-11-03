@@ -19,6 +19,7 @@ func RegisterAdminRoutes(
 	stepUpAuth middleware.StepUpAuthMiddleware,
 	settingService *service.SettingService,
 	panelRateLimiter *middleware.PanelRateLimiter,
+	rbac ...middleware.PermissionChecker,
 ) {
 	// 插件 UI 使用短时能力 URL，仅提供经过安装校验的静态资源。
 	v1.GET("/plugin-ui/:token/*path", h.Admin.Plugin.ServeUIAsset)
@@ -29,6 +30,7 @@ func RegisterAdminRoutes(
 	admin.Use(panelRateLimiter.Global())
 	// 审计中间件挂在认证之后：所有管理面变更类操作 + 敏感读取入审计日志
 	admin.Use(gin.HandlerFunc(auditLog))
+	admin.Use(middleware.RequireAdminRoutePermission(rbac...))
 	admin.Use(middleware.AdminComplianceGuard(settingService))
 	// 受限密钥的账户操作走独立资源校验，普通管理员保持原处理器。
 	admin.Use(h.Admin.Account.ScopedAdminKeyAccounts)
@@ -40,7 +42,8 @@ func RegisterAdminRoutes(
 		registerDashboardRoutes(admin, h)
 
 		// 用户管理
-		registerUserManagementRoutes(admin, h)
+		registerUserManagementRoutes(admin, h, rbac)
+		registerRBACRoutes(admin, h, rbac)
 
 		// 分组管理
 		registerGroupRoutes(admin, h)
@@ -107,6 +110,8 @@ func RegisterAdminRoutes(
 
 		// 本地进程插件管理
 		registerPluginRoutes(admin, h, stepUpAuth)
+		registerPluginInstanceRoutes(admin, h, stepUpAuth)
+		registerPluginTaskRoutes(admin, h, stepUpAuth)
 
 		// API Key 管理
 		registerAdminAPIKeyRoutes(admin, h)
@@ -299,15 +304,19 @@ func registerDashboardRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
 	}
 }
 
-func registerUserManagementRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
+func registerUserManagementRoutes(admin *gin.RouterGroup, h *handler.Handlers, checkers []middleware.PermissionChecker) {
 	users := admin.Group("/users")
+	read := permissionFor(checkers, "users.read")
+	create := permissionFor(checkers, "users.create")
+	update := permissionFor(checkers, "users.update")
+	remove := permissionFor(checkers, "users.delete")
 	{
-		users.GET("", h.Admin.User.List)
-		users.GET("/:id", h.Admin.User.GetByID)
-		users.POST("/:id/auth-identities", h.Admin.User.BindAuthIdentity)
-		users.POST("", h.Admin.User.Create)
-		users.PUT("/:id", h.Admin.User.Update)
-		users.DELETE("/:id", h.Admin.User.Delete)
+		users.GET("", read, h.Admin.User.List)
+		users.GET("/:id", read, h.Admin.User.GetByID)
+		users.POST("/:id/auth-identities", update, h.Admin.User.BindAuthIdentity)
+		users.POST("", create, h.Admin.User.Create)
+		users.PUT("/:id", update, h.Admin.User.Update)
+		users.DELETE("/:id", remove, h.Admin.User.Delete)
 		users.POST("/:id/balance", h.Admin.User.UpdateBalance)
 		users.GET("/:id/api-keys", h.Admin.User.GetUserAPIKeys)
 		users.GET("/:id/usage", h.Admin.User.GetUserUsage)
@@ -324,6 +333,13 @@ func registerUserManagementRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
 		users.GET("/:id/attributes", h.Admin.UserAttribute.GetUserAttributes)
 		users.PUT("/:id/attributes", h.Admin.UserAttribute.UpdateUserAttributes)
 	}
+}
+
+func permissionFor(checkers []middleware.PermissionChecker, permission string) gin.HandlerFunc {
+	if len(checkers) == 0 {
+		return middleware.RequirePermission(nil, permission)
+	}
+	return middleware.RequirePermission(checkers[0], permission)
 }
 
 func registerGroupRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
@@ -780,6 +796,22 @@ func registerPluginRoutes(admin *gin.RouterGroup, h *handler.Handlers, stepUpAut
 	}
 }
 
+func registerPluginInstanceRoutes(admin *gin.RouterGroup, h *handler.Handlers, stepUpAuth middleware.StepUpAuthMiddleware) {
+	instances := admin.Group("/plugin-instances")
+	{
+		instances.GET("", h.Admin.PluginInstance.List)
+		instances.GET("/:id", h.Admin.PluginInstance.Get)
+		instances.GET("/:id/revisions", h.Admin.PluginInstance.Revisions)
+		instances.GET("/:id/status", h.Admin.PluginInstance.Status)
+		instances.POST("", gin.HandlerFunc(stepUpAuth), h.Admin.PluginInstance.Create)
+		instances.PUT("/:id/config", gin.HandlerFunc(stepUpAuth), h.Admin.PluginInstance.SaveConfig)
+		instances.POST("/:id/publish", gin.HandlerFunc(stepUpAuth), h.Admin.PluginInstance.Publish)
+		instances.POST("/:id/disable", gin.HandlerFunc(stepUpAuth), h.Admin.PluginInstance.Disable)
+		instances.DELETE("/:id", gin.HandlerFunc(stepUpAuth), h.Admin.PluginInstance.Delete)
+		instances.PUT("/:id/bindings", gin.HandlerFunc(stepUpAuth), h.Admin.PluginInstance.ReplaceBindings)
+	}
+}
+
 func registerChannelRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
 	channels := admin.Group("/channels")
 	{
@@ -901,4 +933,38 @@ func channelMonitorModeV2Guard(settingService *service.SettingService) gin.Handl
 		}
 		c.Next()
 	}
+}
+
+// RBAC endpoints always fail closed, including when dependencies are missing.
+func registerRBACRoutes(admin *gin.RouterGroup, h *handler.Handlers, checkers []middleware.PermissionChecker) {
+	var checker middleware.PermissionChecker
+	if len(checkers) > 0 {
+		checker = checkers[0]
+	}
+	require := func(code string) gin.HandlerFunc { return middleware.RequirePermission(checker, code) }
+	rbac := h.Admin.RBAC
+	admin.GET("/roles", require("roles.read"), rbac.ListRoles)
+	admin.POST("/roles", require("roles.create"), rbac.CreateRole)
+	admin.GET("/roles/:id", require("roles.read"), rbac.GetRole)
+	admin.PUT("/roles/:id", require("roles.update"), rbac.UpdateRole)
+	admin.DELETE("/roles/:id", require("roles.delete"), rbac.DeleteRole)
+	admin.GET("/permissions", require("permissions.read"), rbac.ListPermissions)
+	admin.GET("/roles/:id/permissions", require("roles.read"), rbac.GetRolePermissions)
+	admin.PUT("/roles/:id/permissions", require("roles.permissions.assign"), rbac.SetRolePermissions)
+	admin.GET("/users/:id/roles", require("users.read"), rbac.GetUserRoles)
+	admin.PUT("/users/:id/roles", require("users.roles.assign"), rbac.SetUserRoles)
+}
+
+func registerPluginTaskRoutes(admin *gin.RouterGroup, h *handler.Handlers, stepUpAuth middleware.StepUpAuthMiddleware) {
+	tasks := admin.Group("/plugin-tasks")
+	tasks.GET("", h.Admin.PluginTask.List)
+	tasks.GET("/:id", h.Admin.PluginTask.Get)
+	tasks.POST("", gin.HandlerFunc(stepUpAuth), h.Admin.PluginTask.Create)
+	tasks.PUT("/:id", gin.HandlerFunc(stepUpAuth), h.Admin.PluginTask.Update)
+	tasks.DELETE("/:id", gin.HandlerFunc(stepUpAuth), h.Admin.PluginTask.Delete)
+	tasks.POST("/:id/run", gin.HandlerFunc(stepUpAuth), h.Admin.PluginTask.Execute)
+	tasks.GET("/:id/runs", h.Admin.PluginTask.Runs)
+	runs := admin.Group("/plugin-runs")
+	runs.GET("/:id", h.Admin.PluginTask.Run)
+	runs.GET("/:id/sensitive", gin.HandlerFunc(stepUpAuth), h.Admin.PluginTask.Sensitive)
 }

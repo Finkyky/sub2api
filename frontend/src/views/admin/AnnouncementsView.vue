@@ -30,7 +30,7 @@
             >
               <Icon name="refresh" size="md" :class="loading ? 'animate-spin' : ''" />
             </button>
-            <button @click="openCreateDialog" class="btn btn-primary">
+            <button v-permission="'announcements.create'" @click="openCreateDialog" class="btn btn-primary">
               <Icon name="plus" size="md" class="mr-1" />
               {{ t('admin.announcements.createAnnouncement') }}
             </button>
@@ -128,14 +128,14 @@
               >
                 <Icon name="chartBar" size="sm" />
               </button>
-              <button
+              <button v-permission="'announcements.update'"
                 @click="openEditDialog(row)"
                 class="flex flex-col items-center gap-0.5 rounded-lg p-1.5 text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-700 dark:hover:bg-dark-600 dark:hover:text-gray-300"
                 :title="t('common.edit')"
               >
                 <Icon name="edit" size="sm" />
               </button>
-              <button
+              <button v-permission="'announcements.delete'"
                 @click="handleDelete(row)"
                 class="flex flex-col items-center gap-0.5 rounded-lg p-1.5 text-gray-500 transition-colors hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-900/20 dark:hover:text-red-400"
                 :title="t('common.delete')"
@@ -146,7 +146,7 @@
           </template>
 
           <template #empty>
-            <EmptyState
+            <EmptyState v-if="can('announcements.create')"
               :title="t('empty.noData')"
               :description="t('admin.announcements.createFirstAnnouncement')"
               :action-text="t('admin.announcements.createAnnouncement')"
@@ -175,7 +175,7 @@
       width="wide"
       @close="closeEdit"
     >
-      <form id="announcement-form" @submit.prevent="handleSave" class="space-y-4">
+      <form v-permission="isEditing ? 'announcements.update' : 'announcements.create'" id="announcement-form" @submit.prevent="handleSave" class="space-y-4">
         <div>
           <label class="input-label">{{ t('admin.announcements.form.title') }}</label>
           <input v-model="form.title" type="text" class="input" required />
@@ -222,7 +222,7 @@
           <button type="button" @click="closeEdit" class="btn btn-secondary">
             {{ t('common.cancel') }}
           </button>
-          <button type="submit" form="announcement-form" :disabled="saving" class="btn btn-primary">
+          <button v-permission="isEditing ? 'announcements.update' : 'announcements.create'" type="submit" form="announcement-form" :disabled="saving" class="btn btn-primary">
             {{ saving ? t('common.saving') : t('common.save') }}
           </button>
         </div>
@@ -230,7 +230,7 @@
     </BaseDialog>
 
     <!-- Delete Confirmation -->
-    <ConfirmDialog
+    <ConfirmDialog v-if="can('announcements.delete')"
       :show="showDeleteDialog"
       :title="t('admin.announcements.deleteAnnouncement')"
       :message="t('admin.announcements.deleteConfirm')"
@@ -257,6 +257,8 @@
 </template>
 
 <script setup lang="ts">
+import { usePermission } from '@/composables/usePermission'
+const { can } = usePermission()
 import { computed, onMounted, onUnmounted, reactive, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useAppStore } from '@/stores/app'

@@ -136,7 +136,10 @@ func InitEnt(cfg *config.Config) (*ent.Client, *sql.DB, error) {
 	migrationCtx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 	defer cancel()
 	if err := initializeDatabaseWithRetry(migrationCtx, func(ctx context.Context) error {
-		return applyMigrationsFS(ctx, drv.DB(), migrations.FS)
+		if err := applyMigrationsFS(ctx, drv.DB(), migrations.FS); err != nil {
+			return err
+		}
+		return SyncRBAC(ctx, drv.DB())
 	}); err != nil {
 		_ = drv.Close() // 迁移失败时关闭驱动，避免资源泄露
 		return nil, nil, err

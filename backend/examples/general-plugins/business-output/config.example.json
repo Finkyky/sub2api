@@ -1,0 +1,15 @@
+{
+  "config_version": 1,
+  "threshold": 1,
+  "rules": [
+    {
+      "id": "business-risk",
+      "version": "1",
+      "keywords": [
+        "guaranteed profit",
+        "risk-free investment"
+      ],
+      "weight": 1
+    }
+  ]
+}

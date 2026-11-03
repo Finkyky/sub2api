@@ -43,3 +43,11 @@ ui/assets/...
 签名对象是 `manifest.json` 的精确原始字节。发布者私钥不得进入插件包、源码仓库或 Sub2API 运行环境。部署者只配置 Base64 Ed25519 公钥。
 
 默认生产配置拒绝未签名包。官方 OpenAI Transport 使用宿主内置公钥验签，不需要配置；其他发布者仍需配置 `trusted_publishers`。`allow_unsigned` 只用于开发者自己构建的本地包。
+
+## schema2 / general.v1 headless 包
+
+示例与完整版本合同见 [general-v1.md](general-v1.md)。schema2 的 requires.general_api=1、transport_api=0；headless 的 ui={}、ui_bridge=0。general.config_version 和 hooks/tasks 必须与 capabilities 匹配，host_capabilities 是声明而非授权。
+
+源模板 runtimes/files 空对象仅用于构建。真实包必须声明当前平台 runtime 与全部普通文件 SHA。M7 package.py 的 runtime key 是 windows-amd64/linux-amd64，包目录为 runtime/windows_amd64/plugin.exe 与 runtime/linux_amd64/plugin；README、sdk/config.schema.json、sdk/config.example.json 也计入 files。
+
+构建器输出 unsigned 开发包，本地安装需 allow_unsigned=true；生产签名仍签 manifest 精确原始字节。主仓库 PluginManifest.Validate 与 PluginPackageInstaller.Install 是最终验收，不使用 legacy v1/manifest.schema.json 验证 schema2。

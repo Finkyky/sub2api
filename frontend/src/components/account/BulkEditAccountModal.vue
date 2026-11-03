@@ -5,7 +5,7 @@
     width="wide"
     @close="handleClose"
   >
-    <form id="bulk-edit-account-form" class="space-y-5" @submit.prevent="() => handleSubmit()">
+    <form v-permission="'accounts.update'" id="bulk-edit-account-form" class="space-y-5" @submit.prevent="() => handleSubmit()">
       <!-- Info -->
       <div class="rounded-lg bg-blue-50 p-4 dark:bg-blue-900/20">
         <p class="text-sm text-blue-700 dark:text-blue-400">
@@ -1427,7 +1427,7 @@
         <button type="button" class="btn btn-secondary" @click="handleClose">
           {{ t('common.cancel') }}
         </button>
-        <button
+        <button v-permission="'accounts.update'"
           type="submit"
           form="bulk-edit-account-form"
           :disabled="submitting"
@@ -1461,7 +1461,7 @@
     </template>
   </BaseDialog>
 
-  <ConfirmDialog
+  <ConfirmDialog v-if="can('accounts.update')"
     :show="showMixedChannelWarning"
     :title="t('admin.accounts.mixedChannelWarningTitle')"
     :message="mixedChannelWarningMessage"
@@ -1474,6 +1474,8 @@
 </template>
 
 <script setup lang="ts">
+import { usePermission } from '@/composables/usePermission'
+const { can } = usePermission()
 import { ref, watch, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useAppStore } from '@/stores/app'

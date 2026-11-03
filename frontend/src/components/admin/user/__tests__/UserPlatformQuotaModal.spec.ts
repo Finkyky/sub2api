@@ -19,6 +19,8 @@ vi.mock('@/api/admin', () => ({
   },
 }))
 
+vi.mock('@/stores/auth', () => ({ useAuthStore: () => ({ isSuperAdmin: true, hasPermission: () => true }) }))
+
 vi.mock('@/stores/app', () => ({
   useAppStore: () => ({
     showError: apiMocks.showError,

@@ -233,6 +233,17 @@ gateway:
   # Minimum max_output_tokens when converting Chat Completions or Anthropic requests to Responses (minimum 16, default 128)
   # Chat Completions 或 Anthropic 请求转换为 Responses 时的最小 max_output_tokens（最小 16，默认 128）
   min_output_tokens: 128
+  # Exact response cache uses the existing Redis instance and never changes its
+  # global maxmemory/eviction policy. Provision capacity at deployment time.
+  # Group configuration and an explicit client declaration still gate activation.
+  # Env prefix: GATEWAY_RESULT_CACHE_；五项预算已列入 .env.example。
+  # 预算不自动启用分组缓存，仍需后台策略及客户端声明。
+  result_cache:
+    io_timeout_ms: 300            # each Redis/policy/access operation (1..60000)
+    wait_timeout_ms: 2000         # contended lease wait (0..60000; 0 = no wait)
+    lease_ttl_ms: 30000           # renew every TTL/3; I/O must be shorter than TTL/3
+    generation_timeout_ms: 600000 # maximum cache-fill budget, not upstream timeout
+    max_concurrent_fills: 32      # per-process active cache-fill limit (1..1024)
   # Timeout for waiting upstream response headers (seconds)
   # 等待上游响应头超时时间（秒）
   response_header_timeout: 600
@@ -286,6 +297,12 @@ gateway:
   #
   # 注意：开启后会影响所有客户端的行为（不仅限于 VS Code / Codex CLI），请谨慎开启。
   force_codex_cli: false
+  # 固定 Codex 基线可选值："codex-linux-rustls-0.153.4"，默认关闭。
+  # 不是通用 Claude TLS 模板，也不自动启用打票/账号收敛。
+  # Env: GATEWAY_OPENAI_CODEX_CLIENT_PROFILE；容器映射见 ONE_CLICK_CN.md。
+  # profile 非空时两个 disable 字段必须保持 false。
+  openai_codex_client_profile: ""
+  disable_codex_identity_enforcement: false
   # Stop rewriting load-shed Codex originators to the official CLI identity.
   # 关闭「把落在上游降载桶的 Codex originator 改写为官方 CLI 身份（codex_cli_rs）」。
   #
@@ -340,6 +357,31 @@ gateway:
   # GPT-5.5 is API-only after its ChatGPT Codex retirement; subscription
   # requests skip this retired fallback and keep their selected model.
   openai_compact_model: "gpt-5.5"
+  # ChatGPT OAuth x-codex-turn-state ticket: harvest a 292-length header via a
+  # dedicated HTTP(S)/SOCKS proxy, store it for ttl_seconds (default 3600), then inject
+  # it on residential-IP production requests. Off by default.
+  # ChatGPT OAuth 门票：用独立 HTTP(S)/SOCKS 代理打到 292 长度的 x-codex-turn-state，默认缓存 1 小时，
+  # 再在住宅 IP 业务请求中覆盖该头。默认关闭。
+  # Env: GATEWAY_OPENAI_CODEX_TICKET_ENABLED=true
+  #      GATEWAY_OPENAI_CODEX_TICKET_HARVEST_PROXY_URL=socks5h://user:pass@host:port
+  # Admin UI 开关（系统设置 → 网关 → Codex 设置 → 292 打票）可覆盖 enabled，无需重启。
+  # Off: do not harvest or inject. On: harvest in the background and inject on production requests.
+  # The harvest proxy should rotate egress IPs itself (fresh CONNECT per request).
+  # Credential shadow accounts retain their existing forwarding policy and are not ticket-gated.
+  openai_codex_ticket:
+    enabled: false
+    target_length: 292
+    ttl_seconds: 3600
+    refresh_before_seconds: 600
+    # 后台「系统设置 → 网关 → Codex 设置」可覆盖此值，无需重启。
+    # 后台值的读取缓存为 5 秒，下个探测周期使用新代理；代理服务商自行负责轮换 IP。
+    harvest_proxy_url: ""
+    harvest_probe_interval_seconds: 6
+    harvest_attempt_timeout_seconds: 25
+    fail_closed: true
+    models:
+      - gpt-6-astra
+      - gpt-5.6-sol
   # ChatGPT Frameless Live 单会话硬上限（秒）。
   live:
     max_session_duration_seconds: 3600
@@ -603,6 +645,7 @@ gateway:
   # TLS fingerprint simulation / TLS 指纹伪装
   # Default profile "claude_cli_v2" simulates Node.js 20.x
   # 默认模板 "claude_cli_v2" 模拟 Node.js 20.x 指纹
+  # Anthropic 账号需单独启用；Codex 对齐使用 openai_codex_client_profile。
   tls_fingerprint:
     enabled: true
     # profiles:
@@ -1082,6 +1125,8 @@ rate_limit:
 # Local OAuth Transport Plugins (Optional)
 # 本地 OAuth 出站传输插件（可选）
 # =============================================================================
+# 标量参数也可用 PLUGINS_*；容器内持久化路径为 /app/data/plugins。
+# 上传/实例/绑定在后台完成，trusted_publishers 等结构用实际 config.yaml。
 plugins:
   # Empty means {{DATA_DIR}}/plugins, or ./data/plugins when DATA_DIR is unset.
   # 留空时使用 {{DATA_DIR}}/plugins；未设置 DATA_DIR 时使用 ./data/plugins。
@@ -1097,6 +1142,20 @@ plugins:
   max_upload_bytes: 134217728
   max_uncompressed_bytes: 268435456
   start_timeout_seconds: 15
+  # Warm instance reconciliation only; cold instances remain lazy.
+  # Default stop/delete propagation: interval + 2 * timeout = 65 seconds,
+  # when complete DB reads and context-aware operations meet the cycle budget.
+  # Existing leases drain on release; database outages are not bounded.
+  instance_reconcile_interval_seconds: 5  # 1-3600
+  instance_reconcile_timeout_seconds: 30  # 1-300
+  # General gateway hook invocation timeout, including binding acquisition.
+  gateway_hook_timeout_seconds: 10  # 1-120; 0 uses default
+  # Bound output hooks buffer the COMPLETE JSON/SSE response before client output.
+  strict_output_timeout_seconds: 120  # 1-1800; 0 uses default
+  strict_output_max_bytes: 8388608  # per response, up to 64 MiB
+  strict_output_total_bytes: 134217728  # buffered bodies across requests, up to 1 GiB
+  strict_output_max_concurrency: 16  # up to 1024; capacity failures are explicit
+
 
 # =============================================================================
 # Pricing Data Source (Optional)

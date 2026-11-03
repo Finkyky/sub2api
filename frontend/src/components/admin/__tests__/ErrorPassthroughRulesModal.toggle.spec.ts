@@ -1,3 +1,4 @@
+import '@/permissions/__tests__/authorizedFixture'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils'
 import ErrorPassthroughRulesModal from '../ErrorPassthroughRulesModal.vue'
@@ -5,7 +6,7 @@ import ErrorPassthroughRulesModal from '../ErrorPassthroughRulesModal.vue'
 const mocks = vi.hoisted(() => ({ list: vi.fn(), toggleEnabled: vi.fn(), showError: vi.fn() }))
 vi.mock('@/api/admin', () => ({ adminAPI: { errorPassthrough: mocks } }))
 vi.mock('@/stores/app', () => ({ useAppStore: () => ({ showError: mocks.showError }) }))
-vi.mock('vue-i18n', () => ({ useI18n: () => ({ t: (key: string) => key }) }))
+vi.mock('vue-i18n', async (importOriginal) => ({ ...await importOriginal<typeof import('vue-i18n')>(), useI18n: () => ({ t: (key: string) => key }) }))
 enableAutoUnmount(afterEach)
 afterEach(() => vi.restoreAllMocks())
 beforeEach(() => vi.resetAllMocks())

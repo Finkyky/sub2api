@@ -392,6 +392,10 @@ func normalizeUpdateGroupInputForSimpleMode(input *UpdateGroupInput) {
 }
 
 func (s *adminServiceImpl) CreateGroup(ctx context.Context, input *CreateGroupInput) (*Group, error) {
+	cacheConfig, cacheErr := NormalizeGroupResponseResultCacheConfig(input.ResponseResultCacheConfig.Config())
+	if cacheErr != nil {
+		return nil, infraerrors.BadRequest("INVALID_RESULT_CACHE_CONFIG", cacheErr.Error())
+	}
 	if s.cfg != nil && s.cfg.RunMode == config.RunModeSimple && NormalizeGroupPlatform(input.Platform) == PlatformComposite {
 		return nil, infraerrors.BadRequest("SIMPLE_MODE_GROUP_NOT_BINDABLE", "composite groups are not supported in simple mode")
 	}
@@ -635,6 +639,7 @@ func (s *adminServiceImpl) CreateGroup(ctx context.Context, input *CreateGroupIn
 		// 固定账号 manifest 配置：账号绑定发生在分组创建之后，创建路径禁止开启，
 		// 成员关系无从校验（前端创建对话框也不展示）。
 		CodexModelsManifestConfig:   normalizeCodexModelsManifestConfig(platform, input.CodexModelsManifestConfig),
+		ResponseResultCacheConfig:   cacheConfig,
 		RPMLimit:                    input.RPMLimit,
 		MaxReasoningEffort:          maxReasoningEffort,
 		MaxReasoningEffortOverLimit: maxReasoningEffortOverLimit,
@@ -1043,6 +1048,14 @@ func (s *adminServiceImpl) UpdateGroup(ctx context.Context, id int64, input *Upd
 	}
 	if input.CodexModelsManifestConfig != nil {
 		group.CodexModelsManifestConfig = *input.CodexModelsManifestConfig
+	}
+	if input.ResponseResultCacheConfig != nil {
+		cfg, err := NormalizeGroupResponseResultCacheConfig(input.ResponseResultCacheConfig.Config())
+		if err != nil {
+			return nil, infraerrors.BadRequest("INVALID_RESULT_CACHE_CONFIG", err.Error())
+		}
+		cfg.Revision = group.ResponseResultCacheConfig.Revision
+		group.ResponseResultCacheConfig = cfg
 	}
 	if input.RPMLimit != nil {
 		group.RPMLimit = *input.RPMLimit

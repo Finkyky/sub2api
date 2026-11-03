@@ -710,6 +710,8 @@ export default {
       perImage: '按图片计费'
     },
     nav: {
+    permissions: '权限管理',
+    roles: '角色管理',
       login: '登录',
       backToDashboard: '回到后台'
     }

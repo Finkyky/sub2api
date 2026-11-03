@@ -32,7 +32,7 @@
     <!-- active provider list -->
     <div v-if="!editing" class="space-y-2">
       <div class="flex justify-end">
-        <button class="btn btn-primary btn-sm" @click="openCreateForm">
+        <button v-permission="'channels.create'" class="btn btn-primary btn-sm" @click="openCreateForm">
           <Icon name="plus" size="sm" class="mr-1" />
           {{ t('admin.channelMonitor.template.createButton') }}
         </button>
@@ -89,7 +89,7 @@
             </p>
           </div>
           <div class="flex flex-shrink-0 gap-2">
-            <button
+            <button v-permission="'channels.update'"
               class="btn btn-secondary btn-sm"
               :disabled="tpl.associated_monitors === 0"
               :title="t('admin.channelMonitor.template.applyTooltip')"
@@ -98,10 +98,10 @@
               <Icon name="refresh" size="sm" class="mr-1" />
               {{ t('admin.channelMonitor.template.applyButton') }}
             </button>
-            <button class="btn btn-secondary btn-sm" @click="openEditForm(tpl)">
+            <button v-permission="'channels.update'" class="btn btn-secondary btn-sm" @click="openEditForm(tpl)">
               {{ t('common.edit') }}
             </button>
-            <button class="btn btn-secondary btn-sm text-red-600" @click="handleDelete(tpl)">
+            <button v-permission="'channels.delete'" class="btn btn-secondary btn-sm text-red-600" @click="handleDelete(tpl)">
               {{ t('common.delete') }}
             </button>
           </div>
@@ -198,7 +198,7 @@
           <button class="btn btn-secondary" @click="$emit('close')">
             {{ t('common.close') }}
           </button>
-          <button v-if="editing" class="btn btn-primary" :disabled="submitting" @click="handleSubmit">
+          <button v-permission="editing === 'new' ? 'channels.create' : 'channels.update'" v-if="editing" class="btn btn-primary" :disabled="submitting" @click="handleSubmit">
             {{ submitting ? t('common.submitting') : editing === 'new' ? t('common.create') : t('common.update') }}
           </button>
         </div>
@@ -214,7 +214,7 @@
     @applied="onApplied"
   />
 
-  <ConfirmDialog
+  <ConfirmDialog v-if="can('channels.delete')"
     :show="confirmDelete.show"
     :title="t('common.delete')"
     :message="confirmDeleteMessage"
@@ -227,6 +227,8 @@
 </template>
 
 <script setup lang="ts">
+import { usePermission } from '@/composables/usePermission'
+const { can } = usePermission()
 import { computed, onBeforeUnmount, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useAppStore } from '@/stores/app'

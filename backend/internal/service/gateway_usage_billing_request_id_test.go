@@ -75,3 +75,38 @@ func TestResolveUsageBillingRequestID_ForcedGrokAudioBeatsClientID(t *testing.T)
 	got := resolveUsageBillingRequestID(ctx, StableGrokAudioBillingRequestID("up-9"))
 	require.Equal(t, "grok_audio:up-9", got)
 }
+
+func TestResolveUsageBillingRequestID_Schema64Boundaries(t *testing.T) {
+	t.Parallel()
+	for _, ns := range []struct {
+		name    string
+		key     ctxkey.Key
+		prefix  string
+		lengths []int
+	}{{"client", ctxkey.ClientRequestID, "client:", []int{57, 58, 64}}, {"local", ctxkey.RequestID, "local:", []int{58, 59, 64}}} {
+		for _, n := range ns.lengths {
+			t.Run(ns.name+"/"+strings.Repeat("x", n), func(t *testing.T) {
+				raw := strings.Repeat("x", n)
+				ctx := context.WithValue(context.Background(), ns.key, raw)
+				id := resolveUsageBillingRequestID(ctx, "upstream")
+				require.LessOrEqual(t, len(id), 64)
+				require.True(t, strings.HasPrefix(id, ns.prefix))
+				require.Equal(t, id, resolveUsageBillingRequestID(ctx, "other-upstream"))
+				if len(ns.prefix)+n <= 64 {
+					require.Equal(t, ns.prefix+raw, id)
+				} else {
+					require.Contains(t, id, "sha256:")
+					ctx2 := context.WithValue(context.Background(), ns.key, raw[:n-1]+"y")
+					require.NotEqual(t, id, resolveUsageBillingRequestID(ctx2, "upstream"))
+				}
+			})
+		}
+	}
+	for _, prefix := range []string{"", "web_search:", "grok-video:", "grok_audio:", "grok_realtime:"} {
+		raw := prefix + strings.Repeat("x", 100)
+		id := resolveUsageBillingRequestID(context.Background(), raw)
+		require.LessOrEqual(t, len(id), 64)
+		require.True(t, strings.HasPrefix(id, prefix))
+		require.Equal(t, id, resolveUsageBillingRequestID(context.Background(), raw))
+	}
+}

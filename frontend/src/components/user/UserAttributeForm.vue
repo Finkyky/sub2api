@@ -1,5 +1,5 @@
 <template>
-  <div v-if="attributes.length > 0" class="space-y-4">
+  <fieldset v-if="canRead && loaded && attributes.length > 0" :disabled="disabled || !canWrite" class="space-y-4">
     <div v-for="attr in attributes" :key="attr.id">
       <label class="input-label">
         {{ attr.name }}
@@ -56,6 +56,7 @@
         v-else-if="attr.type === 'select'"
         v-model="localValues[attr.id]"
         :options="attr.options || []"
+        :disabled="disabled || !canWrite"
         @change="emitChange"
       />
 
@@ -80,7 +81,7 @@
       <!-- Description -->
       <p v-if="attr.description" class="input-hint">{{ attr.description }}</p>
     </div>
-  </div>
+  </fieldset>
 
   <!-- Loading State -->
   <div v-else-if="loading" class="flex justify-center py-4">
@@ -89,61 +90,70 @@
       <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
     </svg>
   </div>
+  <div v-if="error" role="alert" class="text-sm text-red-600 dark:text-red-400">
+    {{ error }} <button type="button" class="btn btn-secondary" @click="load">{{ rt('rbac.retry') }}</button>
+  </div>
 </template>
 
 <script setup lang="ts">
-import { ref, watch, onMounted } from 'vue'
+import { computed, ref, watch, onBeforeUnmount } from 'vue'
+import { useAuthStore } from '@/stores/auth'
+import { useI18n } from 'vue-i18n'
+import { rbacMessages } from '@/components/admin/rbac/messages'
 import { adminAPI } from '@/api/admin'
 import type { UserAttributeDefinition, UserAttributeValuesMap } from '@/types'
 import Select from '@/components/common/Select.vue'
 
 interface Props {
   userId?: number
+  disabled?: boolean
   modelValue: UserAttributeValuesMap
 }
 
 interface Emits {
   (e: 'update:modelValue', value: UserAttributeValuesMap): void
+  (e: 'dirty'): void
 }
 
 const props = defineProps<Props>()
 const emit = defineEmits<Emits>()
 
-const loading = ref(false)
+const auth = useAuthStore()
+const { t: rt } = useI18n({ useScope: 'local', messages: rbacMessages })
+const canRead = computed(() => auth.hasPermission('user_attributes.read') && (!props.userId || auth.hasPermission('users.read')))
+const canWrite = computed(() => canRead.value && auth.hasPermission('users.update'))
+const loading = ref(false), loaded = ref(false), error = ref('')
 const attributes = ref<UserAttributeDefinition[]>([])
 const localValues = ref<UserAttributeValuesMap>({})
-let requestVersion = 0
-
-const loadAttributes = async () => {
+let generation = 0
+async function load() {
+  const seq = ++generation
+  loaded.value = false; loading.value = false; error.value = ''; attributes.value = []; localValues.value = {}
+  if (!canRead.value) return
   loading.value = true
   try {
-    attributes.value = await adminAPI.userAttributes.listEnabledDefinitions()
-  } catch (error) {
-    console.error('Failed to load attributes:', error)
-  } finally {
-    loading.value = false
-  }
-}
-
-const loadUserValues = async () => {
-  if (!props.userId) return
-  const version = ++requestVersion
-
-  try {
-    const values = await adminAPI.userAttributes.getUserAttributeValues(props.userId)
-    if (version !== requestVersion) return
-    const valuesMap: UserAttributeValuesMap = {}
-    values.forEach(v => {
-      valuesMap[v.attribute_id] = v.value
-    })
-    localValues.value = { ...valuesMap }
-    emit('update:modelValue', localValues.value)
-  } catch (error) {
-    console.error('Failed to load user attribute values:', error)
-  }
+    const [definitions, values] = await Promise.allSettled([
+      adminAPI.userAttributes.listEnabledDefinitions(),
+      props.userId ? adminAPI.userAttributes.getUserAttributeValues(props.userId) : Promise.resolve([])
+    ])
+    if (seq !== generation) return
+    if (definitions.status === 'fulfilled') {
+      attributes.value = definitions.value
+      loaded.value = true
+    }
+    if (values.status === 'fulfilled') {
+      localValues.value = Object.fromEntries(values.value.map(v => [v.attribute_id, v.value]))
+      if (props.userId) emit('update:modelValue', { ...localValues.value })
+    }
+    if (definitions.status === 'rejected' || values.status === 'rejected') error.value = rt('rbac.loadFailed')
+  } catch {
+    if (seq === generation) error.value = rt('rbac.loadFailed')
+  } finally { if (seq === generation) loading.value = false }
 }
 
 const emitChange = () => {
+  if (!canWrite.value || !loaded.value || props.disabled) return
+  emit('dirty')
   emit('update:modelValue', { ...localValues.value })
 }
 
@@ -159,6 +169,7 @@ const isOptionSelected = (attrId: number, optionValue: string): boolean => {
 }
 
 const toggleMultiSelectOption = (attrId: number, optionValue: string) => {
+  if (!canWrite.value || !loaded.value || props.disabled) return
   let arr: string[] = []
   const value = localValues.value[attrId]
   if (value) {
@@ -187,15 +198,6 @@ watch(() => props.modelValue, (newVal) => {
   }
 }, { immediate: true })
 
-watch(() => props.userId, (newUserId, _, onCleanup) => {
-  onCleanup(() => { requestVersion++ })
-  localValues.value = {}
-  if (newUserId) {
-    loadUserValues()
-  }
-}, { immediate: true })
-
-onMounted(() => {
-  loadAttributes()
-})
+watch(() => [props.userId, canRead.value], load, { immediate: true })
+onBeforeUnmount(() => { generation++ })
 </script>

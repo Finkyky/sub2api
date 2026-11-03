@@ -3403,6 +3403,32 @@ func TestOpenAIBuildUpstreamRequestOAuthOfficialClientOriginatorCompatibility(t 
 	}
 }
 
+func TestOpenAIBuildUpstreamRequestForwardsCodex166RequestHeaders(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	rec := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(rec)
+	c.Request = httptest.NewRequest(http.MethodPost, "/v1/responses", bytes.NewReader([]byte(`{"model":"gpt-5.4"}`)))
+	c.Request.Header.Set("User-Agent", codexCLIUserAgent)
+	c.Request.Header.Set("originator", openai.CodexDefaultOriginator)
+	c.Request.Header.Set("x-codex-parent-thread-id", "parent-thread")
+	c.Request.Header.Set("x-openai-memgen-request", "true")
+	c.Request.Header.Set("x-openai-subagent", "compact")
+	c.Request.Header.Set("x-responsesapi-include-timing-metrics", "true")
+
+	svc := &OpenAIGatewayService{}
+	account := &Account{
+		Type:        AccountTypeOAuth,
+		Credentials: map[string]any{"chatgpt_account_id": "chatgpt-acc"},
+	}
+	req, err := svc.buildUpstreamRequest(c.Request.Context(), c, account, []byte(`{"model":"gpt-5.4"}`), "token", false, "", true)
+	require.NoError(t, err)
+	require.Equal(t, "parent-thread", req.Header.Get("x-codex-parent-thread-id"))
+	require.Equal(t, "true", req.Header.Get("x-openai-memgen-request"))
+	require.Equal(t, "compact", req.Header.Get("x-openai-subagent"))
+	require.Equal(t, "true", req.Header.Get("x-responsesapi-include-timing-metrics"))
+}
+
 // ==================== P1-08 修复：model 替换性能优化测试 ====================
 
 // ==================== P1-08 修复：model 替换性能优化测试 =============

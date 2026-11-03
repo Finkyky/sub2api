@@ -1,0 +1,11 @@
+# Production source build overlay; use together with docker-compose.local.yml.
+# start.sh uses this instead of the debug/development stack.
+services:
+  sub2api:
+    image: ${SUB2API_SOURCE_IMAGE:-sub2api-custom:local}
+    pull_policy: never
+    build:
+      context: ..
+      dockerfile: Dockerfile
+      args:
+        NPM_CONFIG_REGISTRY: ${NPM_CONFIG_REGISTRY:-}

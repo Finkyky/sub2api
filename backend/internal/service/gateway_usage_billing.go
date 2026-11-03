@@ -2,6 +2,8 @@ package service
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/base64"
 	"errors"
 	"log/slog"
 	"strings"
@@ -214,26 +216,50 @@ func postUsageBilling(ctx context.Context, p *postUsageBillingParams, deps *bill
 	// by the caller after recording the usage log.
 }
 
+// ResolveUsageBillingRequestID exposes the canonical ledger identity for request
+// correlation. It preserves the existing billing idempotency rules.
+func ResolveUsageBillingRequestID(ctx context.Context, upstreamRequestID string) string {
+	return resolveUsageBillingRequestID(ctx, upstreamRequestID)
+}
+
 func resolveUsageBillingRequestID(ctx context.Context, upstreamRequestID string) string {
 	// Forced durable money-event IDs must win over client/local context IDs so
 	// standalone web_search / async video cannot collapse under a reused client id.
 	if requestID := strings.TrimSpace(upstreamRequestID); requestID != "" {
 		if isForcedUsageBillingRequestID(requestID) {
-			return requestID
+			return boundedUsageBillingRequestID(requestID)
 		}
 	}
 	if ctx != nil {
 		if clientRequestID, _ := ctx.Value(ctxkey.ClientRequestID).(string); strings.TrimSpace(clientRequestID) != "" {
-			return "client:" + strings.TrimSpace(clientRequestID)
+			return boundedUsageBillingRequestID("client:" + strings.TrimSpace(clientRequestID))
 		}
 		if requestID, _ := ctx.Value(ctxkey.RequestID).(string); strings.TrimSpace(requestID) != "" {
-			return "local:" + strings.TrimSpace(requestID)
+			return boundedUsageBillingRequestID("local:" + strings.TrimSpace(requestID))
 		}
 	}
 	if requestID := strings.TrimSpace(upstreamRequestID); requestID != "" {
-		return requestID
+		return boundedUsageBillingRequestID(requestID)
 	}
 	return "generated:" + generateRequestID()
+}
+
+// Both usage_logs and cache access/source IDs have a 64-character contract.
+// Preserve every persistable ID; hash the complete oversized ID (not a prefix)
+// so long correlations remain stable without truncation collisions.
+func boundedUsageBillingRequestID(id string) string {
+	if len(id) <= 64 {
+		return id
+	}
+	namespace := ""
+	for _, prefix := range []string{"client:", "local:", "web_search:", "grok-video:", "grok_audio:", "grok_realtime:"} {
+		if strings.HasPrefix(id, prefix) {
+			namespace = prefix
+			break
+		}
+	}
+	digest := sha256.Sum256([]byte(id))
+	return namespace + "sha256:" + base64.RawURLEncoding.EncodeToString(digest[:])
 }
 
 func isForcedUsageBillingRequestID(requestID string) bool {

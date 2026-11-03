@@ -189,7 +189,7 @@
           <button type="button" class="btn btn-sm px-4 py-1.5" @click="handleClose">
             {{ t('common.close') }}
           </button>
-          <button
+          <button v-permission="'groups.update'"
             v-if="isDirty"
             type="button"
             class="btn btn-primary btn-sm px-4 py-1.5"

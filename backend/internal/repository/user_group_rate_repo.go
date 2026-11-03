@@ -175,14 +175,14 @@ func (r *userGroupRateRepository) GetRPMOverrideByUserAndGroup(ctx context.Conte
 //   - 值非 nil：upsert rate_multiplier（保留已有 rpm_override）。
 func (r *userGroupRateRepository) SyncUserGroupRates(ctx context.Context, userID int64, rates map[int64]*float64) error {
 	if len(rates) == 0 {
-		if _, err := r.sql.ExecContext(ctx, `
+		if _, err := txAwareSQLExecutor(ctx, r.sql, nil).ExecContext(ctx, `
 			UPDATE user_group_rate_multipliers
 			SET rate_multiplier = NULL, updated_at = NOW()
 			WHERE user_id = $1
 		`, userID); err != nil {
 			return err
 		}
-		_, err := r.sql.ExecContext(ctx,
+		_, err := txAwareSQLExecutor(ctx, r.sql, nil).ExecContext(ctx,
 			`DELETE FROM user_group_rate_multipliers WHERE user_id = $1 AND rate_multiplier IS NULL AND rpm_override IS NULL`,
 			userID)
 		return err
@@ -201,14 +201,14 @@ func (r *userGroupRateRepository) SyncUserGroupRates(ctx context.Context, userID
 	}
 
 	if len(clearGroupIDs) > 0 {
-		if _, err := r.sql.ExecContext(ctx, `
+		if _, err := txAwareSQLExecutor(ctx, r.sql, nil).ExecContext(ctx, `
 			UPDATE user_group_rate_multipliers
 			SET rate_multiplier = NULL, updated_at = NOW()
 			WHERE user_id = $1 AND group_id = ANY($2)
 		`, userID, pq.Array(clearGroupIDs)); err != nil {
 			return err
 		}
-		if _, err := r.sql.ExecContext(ctx,
+		if _, err := txAwareSQLExecutor(ctx, r.sql, nil).ExecContext(ctx,
 			`DELETE FROM user_group_rate_multipliers WHERE user_id = $1 AND group_id = ANY($2) AND rate_multiplier IS NULL AND rpm_override IS NULL`,
 			userID, pq.Array(clearGroupIDs)); err != nil {
 			return err
@@ -217,7 +217,7 @@ func (r *userGroupRateRepository) SyncUserGroupRates(ctx context.Context, userID
 
 	if len(upsertGroupIDs) > 0 {
 		now := time.Now()
-		_, err := r.sql.ExecContext(ctx, `
+		_, err := txAwareSQLExecutor(ctx, r.sql, nil).ExecContext(ctx, `
 			INSERT INTO user_group_rate_multipliers (user_id, group_id, rate_multiplier, created_at, updated_at)
 			SELECT
 				$1::bigint,

@@ -54,6 +54,8 @@ type UpdateProxyRequest struct {
 	ExpiryWarnDays *int                   `json:"expiry_warn_days" binding:"omitempty,min=0"`
 }
 
+// Normal proxy responses omit stored passwords. Credential export remains on
+// /proxies/data with its separate permission and step-up boundary.
 // List handles listing all proxies with pagination
 // GET /api/v1/admin/proxies
 func (h *ProxyHandler) List(c *gin.Context) {
@@ -78,9 +80,9 @@ func (h *ProxyHandler) List(c *gin.Context) {
 		return
 	}
 
-	out := make([]dto.AdminProxyWithAccountCount, 0, len(proxies))
+	out := make([]dto.ProxyWithAccountCount, 0, len(proxies))
 	for i := range proxies {
-		out = append(out, *dto.ProxyWithAccountCountFromServiceAdmin(&proxies[i]))
+		out = append(out, *dto.ProxyWithAccountCountFromService(&proxies[i]))
 	}
 	response.Paginated(c, out, total, page, pageSize)
 }
@@ -100,9 +102,9 @@ func (h *ProxyHandler) GetAll(c *gin.Context) {
 			response.ErrorFrom(c, err)
 			return
 		}
-		out := make([]dto.AdminProxyWithAccountCount, 0, len(proxies))
+		out := make([]dto.ProxyWithAccountCount, 0, len(proxies))
 		for i := range proxies {
-			out = append(out, *dto.ProxyWithAccountCountFromServiceAdmin(&proxies[i]))
+			out = append(out, *dto.ProxyWithAccountCountFromService(&proxies[i]))
 		}
 		response.Success(c, out)
 		return
@@ -114,9 +116,9 @@ func (h *ProxyHandler) GetAll(c *gin.Context) {
 		return
 	}
 
-	out := make([]dto.AdminProxy, 0, len(proxies))
+	out := make([]dto.Proxy, 0, len(proxies))
 	for i := range proxies {
-		out = append(out, *dto.ProxyFromServiceAdmin(&proxies[i]))
+		out = append(out, *dto.ProxyFromService(&proxies[i]))
 	}
 	response.Success(c, out)
 }
@@ -139,7 +141,7 @@ func (h *ProxyHandler) GetByID(c *gin.Context) {
 		return
 	}
 
-	response.Success(c, dto.ProxyFromServiceAdmin(proxy))
+	response.Success(c, dto.ProxyFromService(proxy))
 }
 
 // Create handles creating a new proxy
@@ -172,7 +174,7 @@ func (h *ProxyHandler) Create(c *gin.Context) {
 		if err != nil {
 			return nil, err
 		}
-		return dto.ProxyFromServiceAdmin(proxy), nil
+		return dto.ProxyFromService(proxy), nil
 	})
 }
 
@@ -222,7 +224,7 @@ func (h *ProxyHandler) Update(c *gin.Context) {
 		return
 	}
 
-	response.Success(c, dto.ProxyFromServiceAdmin(proxy))
+	response.Success(c, dto.ProxyFromService(proxy))
 }
 
 // Delete handles deleting a proxy

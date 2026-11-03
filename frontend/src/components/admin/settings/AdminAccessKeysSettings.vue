@@ -12,7 +12,7 @@
       <button type="button" data-test="dismiss-secret" class="btn btn-secondary btn-sm" @click="secret = ''">{{ t('adminAccessKeys.dismissSecret') }}</button>
     </div>
     <div class="flex gap-2">
-      <button type="button" data-test="create" class="btn btn-primary" :disabled="busy || loading || !loaded" @click="edit()">{{ t('adminAccessKeys.create') }}</button>
+      <button v-permission="'@super'" type="button" data-test="create" class="btn btn-primary" :disabled="busy || loading || !loaded" @click="edit()">{{ t('adminAccessKeys.create') }}</button>
       <button type="button" class="btn btn-secondary" :disabled="busy || loading" @click="load">{{ t('adminAccessKeys.refresh') }}</button>
     </div>
     <p v-if="loading">{{ t('adminAccessKeys.loading') }}</p>

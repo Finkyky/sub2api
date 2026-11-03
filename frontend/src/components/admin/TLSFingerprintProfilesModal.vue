@@ -11,7 +11,7 @@
         <p class="text-sm text-gray-500 dark:text-gray-400">
           {{ t('admin.tlsFingerprintProfiles.description') }}
         </p>
-        <button @click="showCreateModal = true" class="btn btn-primary btn-sm">
+        <button v-permission="'settings.update'" @click="showCreateModal = true" class="btn btn-primary btn-sm">
           <Icon name="plus" size="sm" class="mr-1" />
           {{ t('admin.tlsFingerprintProfiles.createProfile') }}
         </button>
@@ -90,14 +90,14 @@
               </td>
               <td class="px-3 py-2">
                 <div class="flex items-center gap-1">
-                  <button
+                  <button v-permission="'settings.update'"
                     @click="handleEdit(profile)"
                     class="p-1 text-gray-500 hover:text-primary-600 dark:hover:text-primary-400"
                     :title="t('common.edit')"
                   >
                     <Icon name="edit" size="sm" />
                   </button>
-                  <button
+                  <button v-permission="'settings.update'"
                     @click="handleDelete(profile)"
                     class="p-1 text-gray-500 hover:text-red-600 dark:hover:text-red-400"
                     :title="t('common.delete')"
@@ -128,7 +128,7 @@
       :z-index="60"
       @close="closeFormModal"
     >
-      <form @submit.prevent="handleSubmit" class="space-y-4">
+      <form v-permission="'settings.update'" @submit.prevent="handleSubmit" class="space-y-4">
         <!-- Paste YAML -->
         <div>
           <label class="input-label">{{ t('admin.tlsFingerprintProfiles.form.pasteYaml') }}</label>
@@ -304,7 +304,7 @@
           <button @click="closeFormModal" type="button" class="btn btn-secondary">
             {{ t('common.cancel') }}
           </button>
-          <button @click="handleSubmit" :disabled="submitting" class="btn btn-primary">
+          <button v-permission="'settings.update'" @click="handleSubmit" :disabled="submitting" class="btn btn-primary">
             <Icon v-if="submitting" name="refresh" size="sm" class="mr-1 animate-spin" />
             {{ showEditModal ? t('common.update') : t('common.create') }}
           </button>
@@ -313,7 +313,7 @@
     </BaseDialog>
 
     <!-- Delete Confirmation -->
-    <ConfirmDialog
+    <ConfirmDialog v-if="can('settings.update')"
       :show="showDeleteDialog"
       :title="t('admin.tlsFingerprintProfiles.deleteProfile')"
       :message="t('admin.tlsFingerprintProfiles.deleteConfirmMessage', { name: deletingProfile?.name })"
@@ -327,6 +327,8 @@
 </template>
 
 <script setup lang="ts">
+import { usePermission } from '@/composables/usePermission'
+const { can } = usePermission()
 import { ref, reactive, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useAppStore } from '@/stores/app'

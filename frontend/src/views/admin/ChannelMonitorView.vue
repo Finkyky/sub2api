@@ -97,7 +97,7 @@
           </template>
 
           <template #cell-enabled="{ row }">
-            <Toggle :modelValue="row.enabled" @update:modelValue="toggleEnabled(row)" />
+            <Toggle v-if="can('channels.update')" :modelValue="row.enabled" @update:modelValue="toggleEnabled(row)" />
           </template>
 
           <template #cell-actions="{ row }">
@@ -113,7 +113,7 @@
           </template>
 
           <template #empty>
-            <EmptyState
+            <EmptyState v-if="can('channels.create')"
               :title="t('admin.channelMonitor.noMonitorsYet')"
               :description="t('admin.channelMonitor.createFirstMonitor')"
               :action-text="t('admin.channelMonitor.createButton')"
@@ -155,7 +155,7 @@
       @close="showRunResult = false"
     />
 
-    <ConfirmDialog
+    <ConfirmDialog v-if="can('channels.delete')"
       :show="showDeleteDialog"
       :title="t('common.delete')"
       :message="deleteConfirmMessage"
@@ -169,6 +169,8 @@
 </template>
 
 <script setup lang="ts">
+import { usePermission } from '@/composables/usePermission'
+const { can } = usePermission()
 import { ref, reactive, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useAppStore } from '@/stores/app'

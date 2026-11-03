@@ -1,3 +1,4 @@
+import '@/permissions/__tests__/authorizedFixture'
 import { defineComponent } from 'vue'
 import { flushPromises, mount } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'

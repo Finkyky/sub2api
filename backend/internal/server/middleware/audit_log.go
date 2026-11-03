@@ -60,6 +60,9 @@ var auditExtraAllowedKeys = map[string]struct{}{
 	"http_status": {}, "latency_ms": {}, "token_applied": {}, "retryable": {},
 	"event_id": {}, "requested_count": {}, "deleted_events": {}, "deleted_jobs": {},
 	"matched_count": {}, "snapshot_max_id": {}, "filter_hash": {}, "confirm": {},
+	"instance_id": {}, "plugin_id": {}, "expected_generation": {}, "new_generation": {},
+	"revision": {}, "conflict": {}, "deleted": {},
+	"task_id": {}, "run_id": {}, "generation": {}, "status": {},
 }
 
 // SetAuditExtra adds allowlisted, scalar details to the current audit entry.
@@ -111,6 +114,12 @@ func truncateAuditExtraString(value string, limit int) string {
 
 // auditSensitiveReads 需要审计的敏感 GET 读取（method+FullPath → 动作名）。
 var auditSensitiveReads = map[string]string{
+	"GET /api/v1/admin/plugin-runs/:id/sensitive": "admin.plugin_runs.sensitive",
+	"GET /api/v1/admin/roles":                     "role.listed",
+	"GET /api/v1/admin/roles/:id":                 "role.read",
+	"GET /api/v1/admin/permissions":               "permission_catalog.read",
+	"GET /api/v1/admin/roles/:id/permissions":     "role.permissions_read",
+	"GET /api/v1/admin/users/:id/roles":           "user.roles_read",
 	"GET /api/v1/admin/accounts/data":             "admin.accounts.export",
 	"GET /api/v1/admin/proxies/data":              "admin.proxies.export",
 	"GET /api/v1/admin/redeem-codes/export":       "admin.redeem_codes.export",
@@ -124,6 +133,21 @@ var auditSensitiveReads = map[string]string{
 
 // auditActionOverrides 变更类请求的动作名精确映射（未命中时自动推导）。
 var auditActionOverrides = map[string]string{
+	"POST /api/v1/admin/plugin-tasks":                         "admin.plugin_tasks.create",
+	"PUT /api/v1/admin/plugin-tasks/:id":                      "admin.plugin_tasks.update",
+	"DELETE /api/v1/admin/plugin-tasks/:id":                   "admin.plugin_tasks.delete",
+	"POST /api/v1/admin/plugin-tasks/:id/run":                 "admin.plugin_tasks.run",
+	"POST /api/v1/admin/plugin-instances":                     AuditActionPluginInstanceCreate,
+	"PUT /api/v1/admin/plugin-instances/:id/config":           AuditActionPluginInstanceConfig,
+	"POST /api/v1/admin/plugin-instances/:id/publish":         AuditActionPluginInstancePublish,
+	"POST /api/v1/admin/plugin-instances/:id/disable":         AuditActionPluginInstanceDisable,
+	"PUT /api/v1/admin/plugin-instances/:id/bindings":         AuditActionPluginInstanceBindings,
+	"DELETE /api/v1/admin/plugin-instances/:id":               AuditActionPluginInstanceDelete,
+	"POST /api/v1/admin/roles":                                "role.created",
+	"PUT /api/v1/admin/roles/:id":                             "role.updated",
+	"DELETE /api/v1/admin/roles/:id":                          "role.deleted",
+	"PUT /api/v1/admin/roles/:id/permissions":                 "role.permissions_updated",
+	"PUT /api/v1/admin/users/:id/roles":                       "user.roles_updated",
 	"POST /api/v1/auth/login":                                 service.AuditActionLogin,
 	"POST /api/v1/auth/login/2fa":                             service.AuditActionLogin2FA,
 	"POST /api/v1/auth/passkey/login/finish":                  service.AuditActionLogin,
@@ -149,6 +173,17 @@ var auditActionOverrides = map[string]string{
 // auditBodyOmittedRoutes 请求体几乎整体由凭证构成的路由（如整块粘贴 auth JSON 的导入接口）。
 // 这类 body 的凭证内嵌在普通字符串值里，键级脱敏无法覆盖，整体不入库。
 var auditBodyOmittedRoutes = map[string]struct{}{
+	"POST /api/v1/admin/plugin-tasks":                           {},
+	"PUT /api/v1/admin/plugin-tasks/:id":                        {},
+	"DELETE /api/v1/admin/plugin-tasks/:id":                     {},
+	"POST /api/v1/admin/plugin-tasks/:id/run":                   {},
+	"GET /api/v1/admin/plugin-runs/:id/sensitive":               {},
+	"POST /api/v1/admin/plugin-instances":                       {},
+	"PUT /api/v1/admin/plugin-instances/:id/config":             {},
+	"POST /api/v1/admin/plugin-instances/:id/publish":           {},
+	"POST /api/v1/admin/plugin-instances/:id/disable":           {},
+	"PUT /api/v1/admin/plugin-instances/:id/bindings":           {},
+	"DELETE /api/v1/admin/plugin-instances/:id":                 {},
 	"POST /api/v1/auth/passkey/login/finish":                    {},
 	"POST /api/v1/user/passkeys/register/finish":                {},
 	"POST /api/v1/admin/accounts/import/codex-session":          {},
@@ -277,22 +312,31 @@ func NewAuditLogMiddleware(auditService *service.AuditLogService) AuditLogMiddle
 		entry.CredentialMasked = MaskedRequestCredential(c)
 
 		extra := map[string]any{}
-		if value, ok := c.Get(auditCtxKeyExtra); ok {
-			if details, ok := value.(map[string]any); ok {
-				for key, item := range details {
-					extra[key] = item
+		if isPluginInstanceAuditWrite(routeKey) {
+			// Route identity, not arbitrary context text, defines these actions.
+			entry.Action = auditActionOverrides[routeKey]
+			extra = projectPluginInstanceAuditExtra(c, status)
+		} else if action, ok := pluginTaskAuditActions[routeKey]; ok {
+			entry.Action = action
+			extra = projectPluginTaskAuditExtra(c, status)
+		} else {
+			if value, ok := c.Get(auditCtxKeyExtra); ok {
+				if details, ok := value.(map[string]any); ok {
+					for key, item := range details {
+						extra[key] = item
+					}
 				}
 			}
-		}
-		if len(c.Params) > 0 {
-			params := make(map[string]string, len(c.Params))
-			for _, p := range c.Params {
-				params[p.Key] = p.Value
+			if len(c.Params) > 0 {
+				params := make(map[string]string, len(c.Params))
+				for _, p := range c.Params {
+					params[p.Key] = p.Value
+				}
+				extra["params"] = params
 			}
-			extra["params"] = params
-		}
-		if q := service.RedactAuditQuery(c.Request.URL.RawQuery); q != "" {
-			extra["query"] = q
+			if q := service.RedactAuditQuery(c.Request.URL.RawQuery); q != "" {
+				extra["query"] = q
+			}
 		}
 		if len(extra) > 0 {
 			entry.Extra = extra

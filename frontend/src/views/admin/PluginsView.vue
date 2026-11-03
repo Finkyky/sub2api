@@ -1,6 +1,7 @@
 <template>
   <AppLayout>
     <div class="space-y-6">
+      <PluginSectionsNav />
       <section
         class="flex flex-col gap-4 border-b border-gray-200 pb-5 dark:border-dark-700 sm:flex-row sm:items-end sm:justify-between"
       >
@@ -24,14 +25,14 @@
         </div>
 
         <div class="flex flex-shrink-0 items-center gap-2">
-          <input
+          <input v-permission="'@super'"
             ref="fileInput"
             class="hidden"
             type="file"
             accept=".s2plugin,application/zip"
             @change="handleFileSelected"
           />
-          <button
+          <button v-permission="'@super'"
             type="button"
             class="btn btn-primary"
             :disabled="uploading"
@@ -121,7 +122,7 @@
                 {{ plugin.description }}
               </p>
             </div>
-            <button
+            <button v-permission="'@super'"
               type="button"
               class="btn btn-secondary btn-sm"
               @click="openConfiguration(plugin)"
@@ -222,7 +223,7 @@
                   }}%</span
                 >
               </label>
-              <input
+              <input v-permission="'@super'"
                 :value="rolloutValues[plugin.id] ?? currentRollout(plugin)"
                 type="range"
                 min="1"
@@ -238,7 +239,7 @@
           <div
             class="flex flex-wrap justify-end gap-2 border-t border-gray-100 px-5 py-4 dark:border-dark-700"
           >
-            <button
+            <button v-permission="'@super'"
               type="button"
               class="btn btn-secondary btn-sm"
               :disabled="busyID === plugin.id"
@@ -247,7 +248,7 @@
               <Icon name="beaker" size="sm" />
               {{ t("admin.plugins.test") }}
             </button>
-            <button
+            <button v-permission="'@super'"
               v-if="hasEnabledBinding(plugin)"
               type="button"
               class="btn btn-secondary btn-sm"
@@ -257,7 +258,7 @@
               <Icon name="ban" size="sm" />
               {{ t("admin.plugins.disable") }}
             </button>
-            <button
+            <button v-permission="'@super'"
               v-else
               type="button"
               class="btn btn-primary btn-sm"
@@ -271,7 +272,7 @@
               <Icon name="play" size="sm" />
               {{ t("admin.plugins.enable") }}
             </button>
-            <button
+            <button v-permission="'@super'"
               type="button"
               class="btn btn-danger btn-sm"
               :disabled="busyID === plugin.id || hasEnabledBinding(plugin)"
@@ -327,6 +328,7 @@
         </div>
       </BaseDialog>
 
+      <PluginGroupBindingsPanel />
       <TotpStepUpDialog :controller="pluginStepUp" />
     </div>
   </AppLayout>
@@ -341,6 +343,8 @@ import {
   type PluginUISession,
 } from "@/api/admin";
 import { useAppStore } from "@/stores";
+import PluginSectionsNav from '@/components/admin/plugin/PluginSectionsNav.vue';
+import PluginGroupBindingsPanel from '@/components/admin/plugin/PluginGroupBindingsPanel.vue';
 import AppLayout from "@/components/layout/AppLayout.vue";
 import BaseDialog from "@/components/common/BaseDialog.vue";
 import Icon from "@/components/icons/Icon.vue";

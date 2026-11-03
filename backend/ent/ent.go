@@ -35,10 +35,13 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/paymentorder"
 	"github.com/Wei-Shaw/sub2api/ent/paymentproviderinstance"
 	"github.com/Wei-Shaw/sub2api/ent/pendingauthsession"
+	"github.com/Wei-Shaw/sub2api/ent/permission"
 	"github.com/Wei-Shaw/sub2api/ent/promocode"
 	"github.com/Wei-Shaw/sub2api/ent/promocodeusage"
 	"github.com/Wei-Shaw/sub2api/ent/proxy"
 	"github.com/Wei-Shaw/sub2api/ent/redeemcode"
+	"github.com/Wei-Shaw/sub2api/ent/role"
+	"github.com/Wei-Shaw/sub2api/ent/rolepermission"
 	"github.com/Wei-Shaw/sub2api/ent/securitysecret"
 	"github.com/Wei-Shaw/sub2api/ent/setting"
 	"github.com/Wei-Shaw/sub2api/ent/subscriptionplan"
@@ -50,6 +53,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/userattributedefinition"
 	"github.com/Wei-Shaw/sub2api/ent/userattributevalue"
 	"github.com/Wei-Shaw/sub2api/ent/userplatformquota"
+	"github.com/Wei-Shaw/sub2api/ent/userrole"
 	"github.com/Wei-Shaw/sub2api/ent/usersubscription"
 )
 
@@ -134,10 +138,13 @@ func checkColumn(t, c string) error {
 			paymentorder.Table:                  paymentorder.ValidColumn,
 			paymentproviderinstance.Table:       paymentproviderinstance.ValidColumn,
 			pendingauthsession.Table:            pendingauthsession.ValidColumn,
+			permission.Table:                    permission.ValidColumn,
 			promocode.Table:                     promocode.ValidColumn,
 			promocodeusage.Table:                promocodeusage.ValidColumn,
 			proxy.Table:                         proxy.ValidColumn,
 			redeemcode.Table:                    redeemcode.ValidColumn,
+			role.Table:                          role.ValidColumn,
+			rolepermission.Table:                rolepermission.ValidColumn,
 			securitysecret.Table:                securitysecret.ValidColumn,
 			setting.Table:                       setting.ValidColumn,
 			subscriptionplan.Table:              subscriptionplan.ValidColumn,
@@ -149,6 +156,7 @@ func checkColumn(t, c string) error {
 			userattributedefinition.Table:       userattributedefinition.ValidColumn,
 			userattributevalue.Table:            userattributevalue.ValidColumn,
 			userplatformquota.Table:             userplatformquota.ValidColumn,
+			userrole.Table:                      userrole.ValidColumn,
 			usersubscription.Table:              usersubscription.ValidColumn,
 		})
 	})

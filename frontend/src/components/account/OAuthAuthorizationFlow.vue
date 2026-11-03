@@ -187,7 +187,7 @@
             </div>
 
             <!-- Validate Button -->
-            <button
+            <button v-permission="'accounts.create'"
               type="button"
               class="btn btn-primary w-full"
               :disabled="loading || !refreshTokenInput.trim()"
@@ -266,7 +266,7 @@
               </p>
             </div>
 
-            <button
+            <button v-permission="'accounts.create'"
               type="button"
               class="btn btn-primary w-full"
               :disabled="loading || !ssoCookieInput.trim()"
@@ -414,7 +414,7 @@
               </p>
             </div>
 
-            <button
+            <button v-permission="'accounts.create'"
               type="button"
               class="btn btn-primary w-full"
               :disabled="loading || !codexSessionInput.trim()"
@@ -487,7 +487,7 @@
               </p>
             </div>
 
-            <button
+            <button v-permission="'accounts.create'"
               type="button"
               class="btn btn-primary w-full"
               :disabled="loading || !codexPATInput.trim()"
@@ -619,7 +619,7 @@
             </div>
 
             <!-- Auth Button -->
-            <button
+            <button v-permission="'accounts.create'"
               type="button"
               class="btn btn-primary w-full"
               :disabled="loading || !sessionKeyInput.trim()"
@@ -700,7 +700,7 @@
                     {{ t('admin.accounts.oauth.gemini.projectIdHint') }}
                   </p>
                 </div>
-                <button
+                <button v-permission="'accounts.create'"
                   v-if="!authUrl"
                   type="button"
                   :disabled="loading"

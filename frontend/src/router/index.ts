@@ -13,6 +13,7 @@ import { useRoutePrefetch } from '@/composables/useRoutePrefetch'
 import { getSetupStatus } from '@/api/setup'
 import { resolveCompletedSetupRedirectPath } from './setupRedirect'
 import { resolveRouteDocumentTitle } from './title'
+import { adminRoutePolicies, canAccessAdminPath, adminLandingPath } from '@/permissions/policy'
 
 /**
  * Route definitions with lazy loading
@@ -29,6 +30,13 @@ const routes: RouteRecordRaw[] = [
     }
   },
 
+  { path: '/access-denied', name: 'AccessDenied', component: () => import('./AccessDenied.vue'), meta: { requiresAuth: true, title: 'Access denied' } },
+  { path: '/admin/permissions', name: 'AdminPermissions', component: () => import('@/views/admin/PermissionsView.vue'), meta: { requiresAuth: true, requiresAdmin: true, requiredPermission: 'permissions.read', title: 'Permissions', titleKey: 'nav.permissions' } },
+  { path: '/admin/roles', name: 'AdminRoles', component: () => import('@/views/admin/RolesView.vue'), meta: { requiresAuth: true, requiresAdmin: true, requiredPermission: 'roles.read', title: 'Roles', titleKey: 'nav.roles' } },
+  { path: '/admin/plugin-instances', name: 'AdminPluginInstances', component: () => import('@/views/admin/PluginInstancesView.vue'), meta: { requiresAuth: true, requiresAdmin: true, requiredPermission: 'plugin_instances.read', title: 'Plugin Instances', titleKey: 'nav.pluginInstances' } },
+  { path: '/admin/plugin-bindings', name: 'AdminPluginBindings', component: () => import('@/views/admin/PluginBindingsView.vue'), meta: { requiresAuth: true, requiresAdmin: true, requiredPermission: 'plugin_instances.read', title: 'PluginBindings', titleKey: 'nav.pluginBindings' } },
+  { path: '/admin/plugin-tasks', name: 'AdminPluginTasks', component: () => import('@/views/admin/PluginTasksView.vue'), meta: { requiresAuth: true, requiresAdmin: true, requiredPermission: 'plugin_tasks.read', title: 'PluginTasks', titleKey: 'nav.pluginTasks' } },
+  { path: '/admin/plugin-runs', name: 'AdminPluginRuns', component: () => import('@/views/admin/PluginRunsView.vue'), meta: { requiresAuth: true, requiresAdmin: true, requiredPermission: 'plugin_runs.read', title: 'PluginRuns', titleKey: 'nav.pluginRuns' } },
   // ==================== Public Routes ====================
   {
     path: '/home',
@@ -468,6 +476,7 @@ const routes: RouteRecordRaw[] = [
     meta: {
       requiresAuth: true,
       requiresAdmin: true,
+      requiredPermission: 'users.read',
       title: 'User Management',
       titleKey: 'admin.users.title',
       descriptionKey: 'admin.users.description'
@@ -752,6 +761,14 @@ const routes: RouteRecordRaw[] = [
 /**
  * Create router instance
  */
+for (const route of routes) {
+  if (route.path.startsWith('/admin')) {
+    const policy = adminRoutePolicies[route.path]
+    route.meta = { ...route.meta, requiresAuth: true, requiresAdmin: true,
+      requiredPermission: policy?.permission, superOnly: policy?.superOnly === true }
+  }
+}
+
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
   routes,
@@ -825,13 +842,31 @@ router.beforeEach(async (to, _from, next) => {
 
   // Check if route requires authentication
   const requiresAuth = to.meta.requiresAuth !== false // Default to true
-  const requiresAdmin = to.meta.requiresAdmin === true
+  const requiresAdmin = to.path.startsWith('/admin') || to.meta.requiresAdmin === true
+  // Await a live snapshot before management navigation (never trust a cached legacy role).
+  if (authStore.isAuthenticated && (requiresAdmin || ['/login', '/register', '/dashboard'].includes(to.path))) {
+    try { await authStore.refreshUser() } catch {
+      next(authStore.isAuthenticated ? '/access-denied' : '/login')
+      return
+    }
+  }
+  const landing = () => authStore.isAdmin ? adminLandingPath(authStore, path => {
+    const meta = router.resolve(path).meta
+    if (meta.requiresPayment && appStore.cachedPublicSettings?.payment_enabled === false) return false
+    if (meta.requiresRiskControl && appStore.cachedPublicSettings?.risk_control_enabled === false) return false
+    if (authStore.isSimpleMode && ['/admin/subscriptions', '/admin/redeem'].includes(path)) return false
+    return true
+  }) : appStore.backendModeEnabled ? '/access-denied' : '/dashboard'
+  // Login callbacks in older views still target the dashboard. Normalize that landing here.
+  if (to.path === '/dashboard' && authStore.isAdmin) { next(landing()); return }
+  if (to.path === '/access-denied') { if (authStore.isAuthenticated) next(); else next('/login'); return }
+
 
   if (to.path === '/setup') {
     try {
       const status = await getSetupStatus()
       if (!status.needs_setup) {
-        next(resolveCompletedSetupRedirectPath(authStore.isAuthenticated, authStore.isAdmin))
+        next(authStore.isAuthenticated ? landing() : resolveCompletedSetupRedirectPath(false, false))
         return
       }
     } catch {
@@ -850,7 +885,7 @@ router.beforeEach(async (to, _from, next) => {
         return
       }
       // Admin users go to admin dashboard, regular users go to user dashboard
-      next(authStore.isAdmin ? '/admin/dashboard' : '/dashboard')
+      next(landing())
       return
     }
     // Model Plaza:公开路由但受「启用开关 + 可选强制登录」双重控制(后端同口径 fail-closed)
@@ -867,9 +902,7 @@ router.beforeEach(async (to, _from, next) => {
       if (appStore.publicSettingsLoaded && plazaSettings?.model_plaza_enabled === false) {
         next(
           authStore.isAuthenticated
-            ? authStore.isAdmin
-              ? '/admin/dashboard'
-              : '/dashboard'
+            ? landing()
             : '/home'
         )
         return
@@ -906,14 +939,13 @@ router.beforeEach(async (to, _from, next) => {
     return
   }
 
-  // Check admin requirement
-  if (requiresAdmin && !authStore.isAdmin) {
-    // User is authenticated but not admin, redirect to user dashboard
-    next('/dashboard')
+  // An explicit policy is mandatory, including for super administrators.
+  if (requiresAdmin && (!authStore.isAdmin || !canAccessAdminPath(authStore, to.path))) {
+    next(landing() === to.path ? '/access-denied' : landing())
     return
   }
 
-  if (requiresAdmin && authStore.isAdmin) {
+  if (requiresAdmin && authStore.hasPermission('compliance.read')) {
     const adminComplianceStore = useAdminComplianceStore()
     if (!adminComplianceStore.initialized) {
       try {
@@ -946,7 +978,7 @@ router.beforeEach(async (to, _from, next) => {
     appStore.publicSettingsLoaded &&
     appStore.cachedPublicSettings?.payment_enabled === false
   ) {
-    next(authStore.isAdmin ? '/admin/dashboard' : '/dashboard')
+    next(landing())
     return
   }
 
@@ -955,7 +987,7 @@ router.beforeEach(async (to, _from, next) => {
     appStore.publicSettingsLoaded &&
     appStore.cachedPublicSettings?.risk_control_enabled === false
   ) {
-    next(authStore.isAdmin ? '/admin/settings' : '/dashboard')
+    next(canAccessAdminPath(authStore, '/admin/settings') ? '/admin/settings' : landing())
     return
   }
 
@@ -965,7 +997,7 @@ router.beforeEach(async (to, _from, next) => {
     appStore.publicSettingsLoaded &&
     appStore.cachedPublicSettings?.subscription_enabled === false
   ) {
-    next(authStore.isAdmin ? '/admin/dashboard' : '/dashboard')
+    next(landing())
     return
   }
 
@@ -980,7 +1012,7 @@ router.beforeEach(async (to, _from, next) => {
 
     if (restrictedPaths.some((path) => to.path.startsWith(path))) {
       // 简易模式下访问受限页面,重定向到仪表板
-      next(authStore.isAdmin ? '/admin/dashboard' : '/dashboard')
+      next(landing())
       return
     }
   }

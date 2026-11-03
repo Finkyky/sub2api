@@ -18,6 +18,8 @@ const (
 	ContextKeyUser ContextKey = "user"
 	// ContextKeyUserRole 当前用户角色（string）
 	ContextKeyUserRole ContextKey = "user_role"
+	// ContextKeySuperAdmin marks a subject authenticated as the built-in super administrator.
+	ContextKeySuperAdmin ContextKey = "super_admin"
 	// ContextKeyAPIKey API密钥上下文键
 	ContextKeyAPIKey ContextKey = "api_key"
 	// ContextKeySubscription 订阅上下文键

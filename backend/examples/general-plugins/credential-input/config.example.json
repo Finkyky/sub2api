@@ -1,0 +1,20 @@
+{
+  "config_version": 1,
+  "rules": [
+    {
+      "id": "api-key",
+      "version": "1",
+      "pattern": "(?i)\\bsk-[a-z0-9_-]{16,}"
+    },
+    {
+      "id": "bearer",
+      "version": "1",
+      "pattern": "(?i)\\bbearer[ \\t]+[a-z0-9._~+/-]{16,}=*"
+    },
+    {
+      "id": "private-key",
+      "version": "1",
+      "pattern": "-----BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY-----"
+    }
+  ]
+}

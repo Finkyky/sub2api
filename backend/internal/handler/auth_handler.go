@@ -27,6 +27,7 @@ type AuthHandler struct {
 	redeemService        *service.RedeemService
 	totpService          *service.TotpService
 	userAttributeService *service.UserAttributeService
+	rbacService          *service.RBACService
 
 	dingTalkClientInstance *DingTalkClient
 	dingTalkClientMu       sync.Mutex
@@ -45,6 +46,9 @@ func NewAuthHandler(cfg *config.Config, authService *service.AuthService, userSe
 		userAttributeService: userAttributeService,
 	}
 }
+
+// SetRBACService attaches the RBAC snapshot provider.
+func (h *AuthHandler) SetRBACService(rbac *service.RBACService) { h.rbacService = rbac }
 
 // RegisterRequest represents the registration request payload
 type RegisterRequest struct {
@@ -150,10 +154,10 @@ func (h *AuthHandler) ensureBackendModeAllowsUser(ctx context.Context, user *ser
 	if user == nil {
 		return infraerrors.Unauthorized("INVALID_USER", "user not found")
 	}
-	if h == nil || !h.isBackendModeEnabled(ctx) || user.IsAdmin() {
+	if h == nil || !h.isBackendModeEnabled(ctx) {
 		return nil
 	}
-	return infraerrors.Forbidden("BACKEND_MODE_ADMIN_ONLY", "Backend mode is active. Only admin login is allowed.")
+	return requireBackendModeAdminAccess(ctx, h.rbacService, user.ID)
 }
 
 func (h *AuthHandler) ensureBackendModeAllowsNewUserLogin(ctx context.Context) error {
@@ -442,7 +446,10 @@ func (h *AuthHandler) GetCurrentUser(c *gin.Context) {
 
 	type UserResponse struct {
 		userProfileResponse
-		RunMode string `json:"run_mode"`
+		RunMode      string                    `json:"run_mode"`
+		Roles        []service.RBACRoleSummary `json:"roles"`
+		Permissions  []string                  `json:"permissions"`
+		IsSuperAdmin bool                      `json:"is_super_admin"`
 	}
 
 	runMode := config.RunModeStandard
@@ -450,9 +457,20 @@ func (h *AuthHandler) GetCurrentUser(c *gin.Context) {
 		runMode = h.cfg.RunMode
 	}
 
+	snapshot := service.RBACSnapshot{Roles: []service.RBACRoleSummary{}, Permissions: []string{}}
+	if h.rbacService != nil {
+		snapshot, err = h.rbacService.Snapshot(c.Request.Context(), subject.UserID)
+		if err != nil {
+			response.InternalError(c, "Failed to load permissions")
+			return
+		}
+	}
 	response.Success(c, UserResponse{
 		userProfileResponse: userProfileResponseFromService(user, identities),
 		RunMode:             runMode,
+		Roles:               snapshot.Roles,
+		Permissions:         snapshot.Permissions,
+		IsSuperAdmin:        snapshot.IsSuperAdmin,
 	})
 }
 
@@ -695,10 +713,19 @@ func (h *AuthHandler) RefreshToken(c *gin.Context) {
 		return
 	}
 
-	// Backend mode: block non-admin token refresh
-	if h.settingSvc.IsBackendModeEnabled(c.Request.Context()) && result.UserRole != "admin" {
-		response.Forbidden(c, "Backend mode is active. Only admin login is allowed.")
-		return
+	// Resolve identity from the server-issued access token, not request fields or
+	// the legacy role returned by refresh. Revocation applies before disclosure.
+	if h.isBackendModeEnabled(c.Request.Context()) {
+		claims, err := h.authService.ValidateToken(result.AccessToken)
+		if err != nil {
+			response.ErrorFrom(c, err)
+			return
+		}
+		if err := requireBackendModeAdminAccess(c.Request.Context(), h.rbacService, claims.UserID); err != nil {
+			_ = h.authService.RevokeRefreshToken(c.Request.Context(), result.RefreshToken)
+			response.ErrorFrom(c, err)
+			return
+		}
 	}
 
 	response.Success(c, RefreshTokenResponse{

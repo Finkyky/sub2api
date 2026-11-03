@@ -63,6 +63,15 @@ export interface UserProfileSourceContext {
   provider_label?: string | null
 }
 
+
+export interface RoleSummary {
+  id: number
+  code: string
+  name: string
+  is_system?: boolean
+  is_super_admin?: boolean
+}
+
 export interface User {
   id: number
   username: string
@@ -85,6 +94,9 @@ export interface User {
   oidc_bound?: boolean
   wechat_bound?: boolean
   role: 'admin' | 'user' // User role for authorization
+  roles?: RoleSummary[]
+  permissions?: string[]
+  is_super_admin?: boolean
   balance: number // User balance for API usage
   frozen_balance?: number // Balance currently held by async batch jobs
   concurrency: number // Allowed concurrent requests
@@ -639,9 +651,18 @@ export interface Group {
   updated_at: string
 }
 
+export interface ResponseResultCacheInput {
+ enabled: boolean
+ ttl_seconds: number
+ max_response_bytes: number
+ allow_group_sharing: boolean
+}
+export interface ResponseResultCacheConfig extends ResponseResultCacheInput { revision: number }
+
 export interface AdminGroup extends Group {
   // 管理端的 name / description 始终是原字段，各语言译文另放在 i18n 里
   i18n?: GroupI18n
+ response_result_cache_config?: ResponseResultCacheConfig
   force_openai_fast: boolean
   free_openai_fast: boolean
   model_pricing: import('@/api/admin/channels').ChannelModelPricing[]
@@ -856,6 +877,7 @@ export interface CreateGroupRequest {
   supported_model_scopes?: string[]
   model_allowlist?: ModelAllowlist
   codex_models_manifest_config?: CodexModelsManifestConfig
+  response_result_cache_config?: ResponseResultCacheInput
   allow_messages_dispatch?: boolean
   allow_live?: boolean
   default_mapped_model?: string
@@ -924,6 +946,7 @@ export interface UpdateGroupRequest {
   supported_model_scopes?: string[]
   model_allowlist?: ModelAllowlist
   codex_models_manifest_config?: CodexModelsManifestConfig
+  response_result_cache_config?: ResponseResultCacheInput
   allow_messages_dispatch?: boolean
   allow_live?: boolean
   default_mapped_model?: string
@@ -1276,6 +1299,14 @@ export interface Account {
   credentials_status?: Record<string, boolean>
   ollama_cloud_usage?: OllamaCloudUsageState
   opencode_go_usage?: OpenCodeGoUsageState
+  codex_turn_tickets?: Array<{
+    model: string
+    length?: number
+    ready: boolean
+    remaining_seconds: number
+    blocked: boolean
+    expires_at?: string
+  }>
   // Extra fields including Codex usage, OpenAI compact capability, and model-level rate limits.
   extra?: (CodexUsageSnapshot & OpenAICompactState & {
     model_rate_limits?: Record<string, { rate_limited_at: string; rate_limit_reset_at: string }>

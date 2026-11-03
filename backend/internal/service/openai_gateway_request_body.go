@@ -1265,6 +1265,16 @@ func normalizeOpenAIOAuthResponsesCompatibilityFields(reqBody map[string]any) bo
 		delete(reqBody, "commands")
 		changed = true
 	}
+	if streamOptions, exists := reqBody[codexStreamOptionsField]; exists {
+		normalized, keep, streamChanged := normalizeCodexStreamOptions(streamOptions)
+		if !keep {
+			delete(reqBody, codexStreamOptionsField)
+			changed = true
+		} else if streamChanged {
+			reqBody[codexStreamOptionsField] = normalized
+			changed = true
+		}
+	}
 	// Codex can attach internal message metadata when a custom provider is
 	// named OpenAI. ChatGPT rejects this field on input items (#7066).
 	input, _ := reqBody["input"].([]any)
@@ -1311,6 +1321,32 @@ func normalizeOpenAIOAuthResponsesCompatibilityBody(body []byte) ([]byte, bool, 
 		}
 		normalized = next
 		changed = true
+	}
+	if streamOptions := gjson.GetBytes(normalized, codexStreamOptionsField); streamOptions.Exists() {
+		var decoded any
+		if err := decodeOpenAIJSONUseNumber([]byte(streamOptions.Raw), &decoded); err != nil {
+			return body, false, fmt.Errorf("normalize oauth stream_options: %w", err)
+		}
+		normalizedOptions, keep, streamChanged := normalizeCodexStreamOptions(decoded)
+		if !keep {
+			next, err := sjson.DeleteBytes(normalized, codexStreamOptionsField)
+			if err != nil {
+				return body, false, fmt.Errorf("normalize oauth delete stream_options: %w", err)
+			}
+			normalized = next
+			changed = true
+		} else if streamChanged {
+			raw, err := json.Marshal(normalizedOptions)
+			if err != nil {
+				return body, false, fmt.Errorf("normalize oauth stream_options encode: %w", err)
+			}
+			next, err := sjson.SetRawBytes(normalized, codexStreamOptionsField, raw)
+			if err != nil {
+				return body, false, fmt.Errorf("normalize oauth stream_options: %w", err)
+			}
+			normalized = next
+			changed = true
+		}
 	}
 	// Only remove the input-item field, never same-named user content.
 	input := gjson.GetBytes(normalized, "input")

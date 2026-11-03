@@ -1,0 +1,10 @@
+# Direct client -> Caddy -> sub2api baseline. CDN deployments use EDGE_SECURITY.md.
+{$SITE_DOMAIN} {
+    reverse_proxy sub2api:8080 {
+        flush_interval -1
+        header_up X-Real-IP {remote_host}
+        header_up X-Forwarded-For {remote_host}
+        header_up X-Forwarded-Proto {scheme}
+        header_up X-Forwarded-Host {host}
+    }
+}

@@ -142,6 +142,7 @@ docs/*
 !docs/BATCH_IMAGE_MVP.md
 !docs/COMPOSITE_GROUPS.md
 !docs/PLUGIN_DEVELOPMENT.md
+!docs/LINUX_UPDATE_DEPLOYMENT_CN.md
 !docs/channel-monitor-v2-safe-defaults.md
 !docs/codex-credits.md
 !docs/legal/
@@ -163,3 +164,33 @@ issues/
 .vite/
 # 本地闭源插件开发目录及构建产物不进入 Sub2API 仓库
 /plugins/
+
+# Keep only approved general-plugin design/progress documents under superpowers.
+!docs/superpowers/
+docs/superpowers/*
+!docs/superpowers/specs/
+docs/superpowers/specs/*
+!docs/superpowers/specs/2026-09-28-rbac-user-system-design.md
+!docs/superpowers/specs/2026-09-30-general-plugin-platform-design.md
+!docs/superpowers/plans/
+docs/superpowers/plans/*
+!docs/superpowers/plans/2026-09-28-rbac-user-system.md
+!docs/superpowers/plans/2026-09-28-rbac-progress-handoff.md
+!docs/superpowers/plans/2026-09-30-general-plugin-platform.md
+!docs/superpowers/plans/2026-09-30-general-plugin-contracts-phase1.md
+!docs/superpowers/plans/2026-09-30-general-plugin-phase1-handoff.md
+!docs/superpowers/plans/2026-09-30-general-plugin-phase1-hardening.md
+!docs/superpowers/plans/2026-09-30-general-plugin-p2a-manifest.md
+!docs/superpowers/plans/2026-10-01-general-plugin-p2b-runtime.md
+
+# Exact response result cache documents.
+!docs/RESPONSE_RESULT_CACHE.md
+!docs/superpowers/specs/2026-10-08-response-result-cache-design.md
+!docs/superpowers/plans/2026-10-08-response-result-cache-implementation.md
+!docs/superpowers/plans/2026-10-08-response-result-cache-progress.md
+
+# General plugin P2c persistence/lifecycle handoff.
+!docs/superpowers/plans/2026-10-08-general-plugin-p2c-foundation.md
+
+# Remaining work guide (RBAC / result cache / general plugin).
+!docs/superpowers/plans/2026-10-09-remaining-work-dev-guide.md

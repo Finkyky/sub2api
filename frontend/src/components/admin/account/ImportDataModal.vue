@@ -6,7 +6,7 @@
     close-on-click-outside
     @close="handleClose"
   >
-    <form id="import-data-form" class="space-y-4" @submit.prevent="handleImport">
+    <form v-permission="'accounts.import'" id="import-data-form" class="space-y-4" @submit.prevent="handleImport">
       <div class="text-sm text-gray-600 dark:text-dark-300">
         {{ t('admin.accounts.dataImportHint') }}
       </div>
@@ -82,7 +82,7 @@
         <button class="btn btn-secondary" type="button" :disabled="importing" @click="handleClose">
           {{ t('common.cancel') }}
         </button>
-        <button
+        <button v-permission="'accounts.import'"
           class="btn btn-primary"
           type="submit"
           form="import-data-form"

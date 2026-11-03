@@ -200,6 +200,11 @@ func (m *PluginManager) Install(ctx context.Context, reader io.Reader, installed
 	}
 	bindings := make([]PluginBinding, 0, len(packageInfo.Manifest.Capabilities))
 	for _, capability := range packageInfo.Manifest.SortedCapabilities() {
+		// General entries belong to future instance/group bindings, not the
+		// transport capability table or its exclusive routing contract.
+		if packageInfo.Manifest.SchemaVersion != 1 {
+			continue
+		}
 		bindings = append(bindings, PluginBinding{
 			Capability:     capability.ID,
 			Platform:       capability.Platform,
@@ -704,6 +709,9 @@ func (m *PluginManager) SaveConfig(ctx context.Context, id int64, raw json.RawMe
 	if err != nil {
 		return nil, err
 	}
+	if err := requireTransportPluginManifest(installation.Manifest); err != nil {
+		return nil, err
+	}
 	previousConfig, err := m.decryptConfig(installation)
 	if err != nil {
 		return nil, err
@@ -725,6 +733,9 @@ func (m *PluginManager) SaveConfig(ctx context.Context, id int64, raw json.RawMe
 	m.mu.Lock()
 	runtime := m.runtimes[id]
 	m.mu.Unlock()
+	if runtime != nil && (!samePluginPackage(runtime.installation, installation) || runtime.installation.ID != installation.ID) {
+		return nil, ErrPluginStateChanged
+	}
 	temporary := false
 	if runtime == nil {
 		installation, err = m.ensureLocalInstallation(ctx, installation)
@@ -789,6 +800,9 @@ func (m *PluginManager) Test(ctx context.Context, id int64) (*pluginv1.TestConfi
 	if err != nil {
 		return nil, err
 	}
+	if err := requireTransportPluginManifest(installation.Manifest); err != nil {
+		return nil, err
+	}
 	configJSON, err := m.decryptConfig(installation)
 	if err != nil {
 		return nil, err
@@ -796,6 +810,9 @@ func (m *PluginManager) Test(ctx context.Context, id int64) (*pluginv1.TestConfi
 	m.mu.Lock()
 	runtime := m.runtimes[id]
 	m.mu.Unlock()
+	if runtime != nil && (!samePluginPackage(runtime.installation, installation) || runtime.installation.ID != installation.ID) {
+		return nil, ErrPluginStateChanged
+	}
 	temporary := false
 	if runtime == nil {
 		installation, err = m.ensureLocalInstallation(ctx, installation)

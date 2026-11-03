@@ -90,6 +90,11 @@ func createGroupRecord(ctx context.Context, client *dbent.Client, groupIn *servi
 	if groupIn == nil {
 		return errors.New("group is nil")
 	}
+	cfg, cfgErr := service.NormalizeGroupResponseResultCacheConfig(groupIn.ResponseResultCacheConfig)
+	if cfgErr != nil {
+		return cfgErr
+	}
+	cfg.Revision = 1
 	modelPricing, err := json.Marshal(groupIn.ModelPricing)
 	if err != nil {
 		return fmt.Errorf("marshal group model pricing: %w", err)
@@ -145,6 +150,7 @@ func createGroupRecord(ctx context.Context, client *dbent.Client, groupIn *servi
 		SetMessagesDispatchModelConfig(groupIn.MessagesDispatchModelConfig).
 		SetModelAllowlist(service.DomainGroupModelAllowlist(groupIn.ModelAllowlist)).
 		SetCodexModelsManifestConfig(groupIn.CodexModelsManifestConfig).
+		SetResponseResultCacheConfig(cfg).
 		SetRpmLimit(groupIn.RPMLimit).
 		SetMaxReasoningEffort(groupIn.MaxReasoningEffort).
 		SetMaxReasoningEffortOverLimit(groupIn.MaxReasoningEffortOverLimit).
@@ -176,6 +182,8 @@ func createGroupRecord(ctx context.Context, client *dbent.Client, groupIn *servi
 	if err != nil {
 		return translatePersistenceError(err, nil, service.ErrGroupExists)
 	}
+	// Publish normalized server metadata only after persistence succeeds.
+	groupIn.ResponseResultCacheConfig = cfg
 	groupIn.ID = created.ID
 	groupIn.CreatedAt = created.CreatedAt
 	groupIn.UpdatedAt = created.UpdatedAt
@@ -283,6 +291,18 @@ func (r *groupRepository) GetByIDLite(ctx context.Context, id int64) (*service.G
 }
 
 func (r *groupRepository) Update(ctx context.Context, groupIn *service.Group) error {
+	if groupIn == nil {
+		return errors.New("group is nil")
+	}
+	cfg, cfgErr := service.NormalizeGroupResponseResultCacheConfig(groupIn.ResponseResultCacheConfig)
+	if cfgErr != nil {
+		return cfgErr
+	}
+	oldRevision := cfg.Revision
+	if oldRevision == int64(^uint64(0)>>1) {
+		return service.ErrResultCachePolicyConflict
+	}
+	cfg.Revision++
 	modelPricing, err := json.Marshal(groupIn.ModelPricing)
 	if err != nil {
 		return fmt.Errorf("marshal group model pricing: %w", err)
@@ -330,6 +350,7 @@ func (r *groupRepository) Update(ctx context.Context, groupIn *service.Group) er
 		SetMessagesDispatchModelConfig(groupIn.MessagesDispatchModelConfig).
 		SetModelAllowlist(service.DomainGroupModelAllowlist(groupIn.ModelAllowlist)).
 		SetCodexModelsManifestConfig(groupIn.CodexModelsManifestConfig).
+		SetResponseResultCacheConfig(cfg).
 		SetRpmLimit(groupIn.RPMLimit).
 		SetMaxReasoningEffort(groupIn.MaxReasoningEffort).
 		SetMaxReasoningEffortOverLimit(groupIn.MaxReasoningEffortOverLimit).
@@ -443,10 +464,20 @@ func (r *groupRepository) Update(ctx context.Context, groupIn *service.Group) er
 	}
 	builder = builder.SetI18n(i18n)
 
+	builder = builder.Where(func(sel *entsql.Selector) {
+		sel.Where(entsql.P(func(b *entsql.Builder) {
+			b.WriteString("COALESCE((").Ident(group.FieldResponseResultCacheConfig).WriteString("->>'revision')::bigint, 1) = ").Arg(oldRevision)
+		}))
+	})
 	updated, err := builder.Save(ctx)
+	if dbent.IsNotFound(err) {
+		return service.ErrResultCachePolicyConflict
+	}
 	if err != nil {
 		return translatePersistenceError(err, service.ErrGroupNotFound, service.ErrGroupExists)
 	}
+	// Preserve the caller's old CAS token after any failed write.
+	groupIn.ResponseResultCacheConfig = cfg
 	groupIn.UpdatedAt = updated.UpdatedAt
 	if err := enqueueSchedulerOutbox(ctx, r.sql, service.SchedulerOutboxEventGroupChanged, nil, &groupIn.ID, nil); err != nil {
 		logger.LegacyPrintf("repository.group", "[SchedulerOutbox] enqueue group update failed: group=%d err=%v", groupIn.ID, err)

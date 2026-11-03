@@ -16,6 +16,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/Wei-Shaw/sub2api/internal/pkg/codexclient"
 	"github.com/spf13/viper"
 	"golang.org/x/net/http/httpguts"
 )
@@ -170,12 +171,19 @@ func (c *MCPConfig) Validate() error {
 // PluginConfig 控制管理员手动上传的本地进程插件。
 // 默认不包含插件，也不允许安装未签名插件；TrustedPublishers 用于追加第三方发布者。
 type PluginConfig struct {
-	DataDir              string            `mapstructure:"data_dir"`
-	AllowUnsigned        bool              `mapstructure:"allow_unsigned"`
-	TrustedPublishers    map[string]string `mapstructure:"trusted_publishers"`
-	MaxUploadBytes       int64             `mapstructure:"max_upload_bytes"`
-	MaxUncompressedBytes int64             `mapstructure:"max_uncompressed_bytes"`
-	StartTimeoutSeconds  int               `mapstructure:"start_timeout_seconds"`
+	GatewayHookTimeoutSeconds        int               `mapstructure:"gateway_hook_timeout_seconds"`
+	StrictOutputTimeoutSeconds       int               `mapstructure:"strict_output_timeout_seconds"`
+	StrictOutputMaxBytes             int64             `mapstructure:"strict_output_max_bytes"`
+	StrictOutputTotalBytes           int64             `mapstructure:"strict_output_total_bytes"`
+	StrictOutputMaxConcurrency       int               `mapstructure:"strict_output_max_concurrency"`
+	DataDir                          string            `mapstructure:"data_dir"`
+	AllowUnsigned                    bool              `mapstructure:"allow_unsigned"`
+	TrustedPublishers                map[string]string `mapstructure:"trusted_publishers"`
+	MaxUploadBytes                   int64             `mapstructure:"max_upload_bytes"`
+	MaxUncompressedBytes             int64             `mapstructure:"max_uncompressed_bytes"`
+	StartTimeoutSeconds              int               `mapstructure:"start_timeout_seconds"`
+	InstanceReconcileIntervalSeconds int               `mapstructure:"instance_reconcile_interval_seconds"`
+	InstanceReconcileTimeoutSeconds  int               `mapstructure:"instance_reconcile_timeout_seconds"`
 }
 
 type LogConfig struct {
@@ -1033,6 +1041,7 @@ type GatewayConfig struct {
 	// MinOutputTokens is the minimum max_output_tokens used when
 	// converting Chat Completions or Anthropic requests to Responses.
 	MinOutputTokens int `mapstructure:"min_output_tokens"`
+	ResultCache ResultCacheConfig `mapstructure:"result_cache"`
 	// 等待上游响应头的超时时间（秒），0表示无超时
 	// 注意：这不影响流式数据传输，只控制等待响应头的时间
 	ResponseHeaderTimeout int `mapstructure:"response_header_timeout"`
@@ -1074,7 +1083,8 @@ type GatewayConfig struct {
 	//
 	// 取反义命名是为了让零值安全：该开关会发布为进程级快照，未经 viper 加载而手工构造的
 	// Config（测试、工具）其零值必须落在「强制统一开启」这一侧，否则会静默丢掉这层保护。
-	DisableCodexIdentityEnforcement bool `mapstructure:"disable_codex_identity_enforcement"`
+	DisableCodexIdentityEnforcement bool   `mapstructure:"disable_codex_identity_enforcement"`
+	OpenAICodexClientProfile        string `mapstructure:"openai_codex_client_profile"`
 	// DisableCodexOriginatorNormalization: 已废弃，等价于 DisableCodexIdentityEnforcement。
 	// 保留以兼容既有配置文件；加载时会折叠进新键，不要在新代码里直接读取。
 	DisableCodexOriginatorNormalization bool `mapstructure:"disable_codex_originator_normalization"`
@@ -1093,6 +1103,9 @@ type GatewayConfig struct {
 	// OpenAICompactModel: /responses/compact 上游使用的模型。
 	// compact 端点支持模型滞后于普通 /responses 时，可用该配置降级规避上游错误。
 	OpenAICompactModel string `mapstructure:"openai_compact_model"`
+	// OpenAICodexTicket: ChatGPT OAuth 账号按 (账号, 模型) 捕获 292 长度
+	// x-codex-turn-state，并在住宅 IP 业务请求中注入该头。默认关闭。
+	OpenAICodexTicket OpenAICodexTicketConfig `mapstructure:"openai_codex_ticket"`
 	// OpenAIWS: OpenAI Responses WebSocket 配置（默认开启，可按需回滚到 HTTP）
 	OpenAIWS GatewayOpenAIWSConfig `mapstructure:"openai_ws"`
 	// Live: ChatGPT Frameless Live 会话配置。
@@ -1307,6 +1320,21 @@ func (c *UserMessageQueueConfig) GetEffectiveMode() string {
 		return UMQModeSerialize // 向后兼容
 	}
 	return ""
+}
+
+// OpenAICodexTicketConfig 控制 ChatGPT OAuth 的 x-codex-turn-state 门票。
+// 打票走 harvest_proxy_url（SOCKS），业务出站仍用账号住宅 proxy_id，只替换该请求头。
+// 门票默认有效 3600 秒，临近过期前 refresh_before_seconds 重新打票。
+type OpenAICodexTicketConfig struct {
+	Enabled                      bool     `mapstructure:"enabled"`
+	TargetLength                 int      `mapstructure:"target_length"`
+	TTLSeconds                   int      `mapstructure:"ttl_seconds"`
+	RefreshBeforeSeconds         int      `mapstructure:"refresh_before_seconds"`
+	HarvestProxyURL              string   `mapstructure:"harvest_proxy_url"`
+	HarvestProbeIntervalSeconds  int      `mapstructure:"harvest_probe_interval_seconds"`
+	HarvestAttemptTimeoutSeconds int      `mapstructure:"harvest_attempt_timeout_seconds"`
+	FailClosed                   bool     `mapstructure:"fail_closed"`
+	Models                       []string `mapstructure:"models"`
 }
 
 // DefaultOpenAIWSClientFirstMessageTimeoutSeconds preserves the legacy ingress deadline.
@@ -2409,12 +2437,19 @@ func setDefaults() {
 	viper.SetDefault("pricing.hash_check_interval_minutes", 10)
 
 	// 本地进程插件。插件必须由管理员手动上传，项目默认不携带任何插件能力。
+	viper.SetDefault("plugins.gateway_hook_timeout_seconds", 10)
+	viper.SetDefault("plugins.strict_output_timeout_seconds", 120)
+	viper.SetDefault("plugins.strict_output_max_bytes", 8*1024*1024)
+	viper.SetDefault("plugins.strict_output_total_bytes", 128*1024*1024)
+	viper.SetDefault("plugins.strict_output_max_concurrency", 16)
 	viper.SetDefault("plugins.data_dir", "")
 	viper.SetDefault("plugins.allow_unsigned", false)
 	viper.SetDefault("plugins.trusted_publishers", map[string]string{})
 	viper.SetDefault("plugins.max_upload_bytes", int64(128*1024*1024))
 	viper.SetDefault("plugins.max_uncompressed_bytes", int64(256*1024*1024))
 	viper.SetDefault("plugins.start_timeout_seconds", 15)
+	viper.SetDefault("plugins.instance_reconcile_interval_seconds", 5)
+	viper.SetDefault("plugins.instance_reconcile_timeout_seconds", 30)
 
 	// Timezone (default to Asia/Shanghai for Chinese users)
 	viper.SetDefault("timezone", "Asia/Shanghai")
@@ -2491,10 +2526,20 @@ func setDefaults() {
 	viper.SetDefault("gateway.max_same_account_retries_gemini", 4)
 	viper.SetDefault("gateway.force_codex_cli", false)
 	viper.SetDefault("gateway.disable_codex_identity_enforcement", false)
+	viper.SetDefault("gateway.openai_codex_client_profile", "")
 	viper.SetDefault("gateway.disable_codex_originator_normalization", false)
 	viper.SetDefault("gateway.codex_image_generation_bridge_enabled", false)
 	viper.SetDefault("gateway.openai_passthrough_allow_timeout_headers", false)
 	viper.SetDefault("gateway.openai_compact_model", "gpt-5.5")
+	viper.SetDefault("gateway.openai_codex_ticket.enabled", false)
+	viper.SetDefault("gateway.openai_codex_ticket.target_length", 292)
+	viper.SetDefault("gateway.openai_codex_ticket.ttl_seconds", 3600)
+	viper.SetDefault("gateway.openai_codex_ticket.refresh_before_seconds", 600)
+	viper.SetDefault("gateway.openai_codex_ticket.harvest_proxy_url", "")
+	viper.SetDefault("gateway.openai_codex_ticket.harvest_probe_interval_seconds", 6)
+	viper.SetDefault("gateway.openai_codex_ticket.harvest_attempt_timeout_seconds", 25)
+	viper.SetDefault("gateway.openai_codex_ticket.fail_closed", true)
+	viper.SetDefault("gateway.openai_codex_ticket.models", []string{"gpt-6-astra", "gpt-5.6-sol"})
 	viper.SetDefault("gateway.live.max_session_duration_seconds", 3600)
 	// OpenAI Responses WebSocket（默认开启；可通过 force_http 紧急回滚）
 	viper.SetDefault("gateway.openai_ws.enabled", true)
@@ -2586,6 +2631,12 @@ func setDefaults() {
 	viper.SetDefault("gateway.max_body_size", int64(256*1024*1024))
 	viper.SetDefault("gateway.text_max_body_size", int64(32*1024*1024))
 	viper.SetDefault("gateway.upstream_response_read_max_bytes", DefaultUpstreamResponseReadMaxBytes)
+	resultCacheDefaults := DefaultResultCacheConfig()
+	viper.SetDefault("gateway.result_cache.io_timeout_ms", resultCacheDefaults.IOTimeoutMS)
+	viper.SetDefault("gateway.result_cache.wait_timeout_ms", resultCacheDefaults.WaitTimeoutMS)
+	viper.SetDefault("gateway.result_cache.lease_ttl_ms", resultCacheDefaults.LeaseTTLMS)
+	viper.SetDefault("gateway.result_cache.generation_timeout_ms", resultCacheDefaults.GenerationTimeoutMS)
+	viper.SetDefault("gateway.result_cache.max_concurrent_fills", resultCacheDefaults.MaxConcurrentFills)
 	viper.SetDefault("gateway.models_list_read_max_bytes", DefaultModelsListReadMaxBytes)
 	viper.SetDefault("gateway.proxy_probe_response_read_max_bytes", int64(1024*1024))
 	viper.SetDefault("gateway.gemini_debug_response_headers", false)
@@ -2769,6 +2820,14 @@ func (c *Config) Validate() error {
 	if c.Gateway.MinOutputTokens < 16 {
 		return fmt.Errorf("gateway.min_output_tokens must be at least 16")
 	}
+	if profile := c.Gateway.OpenAICodexClientProfile; profile != "" {
+		if profile != codexclient.Profile {
+			return fmt.Errorf("gateway.openai_codex_client_profile must be empty or %s", codexclient.Profile)
+		}
+		if c.Gateway.DisableCodexIdentityEnforcement || c.Gateway.DisableCodexOriginatorNormalization {
+			return fmt.Errorf("gateway.openai_codex_client_profile requires Codex identity enforcement")
+		}
+	}
 	forwardedClientIPHeaders, err := NormalizeForwardedClientIPHeaders(c.Security.ForwardedClientIPHeaders)
 	if err != nil {
 		return fmt.Errorf("security.forwarded_client_ip_headers: %w", err)
@@ -2780,6 +2839,22 @@ func (c *Config) Validate() error {
 		return fmt.Errorf("security.proxy_probe.urls: %w", err)
 	}
 	c.Security.ProxyProbe.URLs = proxyProbeURLs
+	if c.Plugins.GatewayHookTimeoutSeconds < 0 || c.Plugins.GatewayHookTimeoutSeconds > 120 || c.Plugins.StrictOutputTimeoutSeconds < 0 || c.Plugins.StrictOutputTimeoutSeconds > 1800 {
+		return fmt.Errorf("plugin gateway timeouts exceed supported bounds")
+	}
+	if c.Plugins.StrictOutputMaxBytes < 0 || c.Plugins.StrictOutputMaxBytes > 64*1024*1024 || c.Plugins.StrictOutputTotalBytes < 0 || c.Plugins.StrictOutputTotalBytes > 1024*1024*1024 || c.Plugins.StrictOutputMaxConcurrency < 0 || c.Plugins.StrictOutputMaxConcurrency > 1024 {
+		return fmt.Errorf("plugin strict output resource limits exceed supported bounds")
+	}
+	effectivePluginResponseBytes, effectivePluginTotalBytes := c.Plugins.StrictOutputMaxBytes, c.Plugins.StrictOutputTotalBytes
+	if effectivePluginResponseBytes == 0 {
+		effectivePluginResponseBytes = 8 * 1024 * 1024
+	}
+	if effectivePluginTotalBytes == 0 {
+		effectivePluginTotalBytes = 128 * 1024 * 1024
+	}
+	if effectivePluginResponseBytes > effectivePluginTotalBytes {
+		return fmt.Errorf("plugin strict output per-response bytes exceed total bytes")
+	}
 	if c.Plugins.MaxUploadBytes <= 0 || c.Plugins.MaxUploadBytes > 1024*1024*1024 {
 		return fmt.Errorf("plugins.max_upload_bytes must be between 1 and 1073741824")
 	}
@@ -2788,6 +2863,12 @@ func (c *Config) Validate() error {
 	}
 	if c.Plugins.StartTimeoutSeconds < 1 || c.Plugins.StartTimeoutSeconds > 120 {
 		return fmt.Errorf("plugins.start_timeout_seconds must be between 1 and 120")
+	}
+	if c.Plugins.InstanceReconcileIntervalSeconds < 1 || c.Plugins.InstanceReconcileIntervalSeconds > 3600 {
+		return fmt.Errorf("plugins.instance_reconcile_interval_seconds must be between 1 and 3600")
+	}
+	if c.Plugins.InstanceReconcileTimeoutSeconds < 1 || c.Plugins.InstanceReconcileTimeoutSeconds > 300 {
+		return fmt.Errorf("plugins.instance_reconcile_timeout_seconds must be between 1 and 300")
 	}
 	if c.Server.ReadHeaderTimeout < 1 || c.Server.ReadHeaderTimeout > 60 {
 		return fmt.Errorf("server.read_header_timeout must be between 1 and 60 seconds")
@@ -3404,6 +3485,9 @@ func (c *Config) Validate() error {
 	}
 	if c.Idempotency.CleanupBatchSize <= 0 {
 		return fmt.Errorf("idempotency.cleanup_batch_size must be positive")
+	}
+	if err := c.Gateway.ResultCache.Validate(); err != nil {
+		return err
 	}
 	if c.Gateway.MaxBodySize <= 0 {
 		return fmt.Errorf("gateway.max_body_size must be positive")

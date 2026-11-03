@@ -2,6 +2,14 @@
 
 This directory contains files for deploying Sub2API on Linux servers and Apple-silicon Macs.
 
+## 当前定制源码一键启动
+
+从仓库根目录执行 `bash deploy/start.sh`。首次可用
+`bash deploy/start.sh --codex-aligned --https --domain api.example.com`
+同时初始化固定 Codex profile 和 Caddy HTTPS；已有 `.env` 原样保留。
+完整配置、预构建镜像、后台设置和回滚清单见 `ONE_CLICK_CN.md`。
+此入口构建当前源码；下面的下载脚本用于上游镜像，不包含本地修改。
+
 ## Deployment Methods
 
 | Method | Best For | Setup Wizard |
@@ -16,7 +24,11 @@ This directory contains files for deploying Sub2API on Linux servers and Apple-s
 |------|-------------|
 | `docker-compose.yml` | Docker Compose configuration (named volumes) |
 | `docker-compose.local.yml` | Docker Compose configuration (local directories, easy migration) |
-| `docker-deploy.sh` | **One-click Docker deployment script (recommended)** |
+| `start.sh` | Current-source production build, secret initialization and optional HTTPS |
+| `docker-compose.source.yml` | Production source-build overlay |
+| `docker-compose.https.yml` / `Caddyfile.docker` | Optional Caddy HTTPS and exact proxy trust |
+| `ONE_CLICK_CN.md` | One-click configuration and deployment guide (Chinese) |
+| `docker-deploy.sh` | Upstream deployment-file download script |
 | `apple-container.sh` | Native Apple `container` lifecycle script |
 | `APPLE_CONTAINER.md` | Apple `container` deployment and operations guide |
 | `.env.example` | Container environment variables template |

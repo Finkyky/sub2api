@@ -3,6 +3,7 @@
 package handler
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -83,4 +84,34 @@ func TestAuthHandlerGetCurrentUserReturnsProfileCompatibilityFields(t *testing.T
 	require.True(t, ok)
 	require.Equal(t, "linuxdo", usernameSource["provider"])
 	require.Equal(t, "linuxdo", usernameSource["source"])
+}
+
+// meRBACRepo supplies fresh authorization state for /auth/me.
+type meRBACRepo struct{ roles []service.RolePermissions }
+
+func (r meRBACRepo) GetRolePermissions(context.Context, int64) ([]service.RolePermissions, error) {
+	return r.roles, nil
+}
+
+func TestAuthHandlerGetCurrentUserReturnsRBACSnapshot(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	repo := &userHandlerRepoStub{user: &service.User{ID: 31, Email: "me@example.com", Role: service.RoleAdmin, Status: service.StatusActive}}
+	h := &AuthHandler{userService: service.NewUserService(repo, nil, nil, nil), rbacService: service.NewRBACService(meRBACRepo{roles: []service.RolePermissions{{ID: 2, Code: "auditor", Name: "Auditor", Permissions: []string{"audit_logs.read"}}}})}
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodGet, "/api/v1/auth/me", nil)
+	c.Set(string(middleware2.ContextKeyUser), middleware2.AuthSubject{UserID: 31})
+	h.GetCurrentUser(c)
+	require.Equal(t, http.StatusOK, w.Code)
+	var resp struct {
+		Data struct {
+			Roles        []service.RBACRoleSummary `json:"roles"`
+			Permissions  []string                  `json:"permissions"`
+			IsSuperAdmin bool                      `json:"is_super_admin"`
+		} `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+	require.Equal(t, []string{"audit_logs.read"}, resp.Data.Permissions)
+	require.Equal(t, "auditor", resp.Data.Roles[0].Code)
+	require.False(t, resp.Data.IsSuperAdmin)
 }

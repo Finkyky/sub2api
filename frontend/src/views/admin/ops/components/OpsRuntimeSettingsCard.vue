@@ -264,7 +264,7 @@ onMounted(() => {
       <div class="rounded-2xl bg-gray-50 p-4 dark:bg-dark-700/50">
         <div class="mb-3 flex items-center justify-between">
           <h4 class="text-sm font-semibold text-gray-900 dark:text-white">{{ t('admin.ops.runtime.alertTitle') }}</h4>
-          <button class="btn btn-sm btn-secondary" @click="openAlertEditor">{{ t('common.edit') }}</button>
+          <button v-permission="'ops.manage'" class="btn btn-sm btn-secondary" @click="openAlertEditor">{{ t('common.edit') }}</button>
         </div>
         <div class="grid grid-cols-1 gap-3 md:grid-cols-2">
           <div class="text-xs text-gray-600 dark:text-gray-300">
@@ -428,7 +428,7 @@ onMounted(() => {
                 <div class="text-xs font-bold text-gray-900 dark:text-white">{{ t('admin.ops.runtime.silencing.entries.title') }}</div>
                 <p class="text-[11px] text-gray-500 dark:text-gray-400">{{ t('admin.ops.runtime.silencing.entries.hint') }}</p>
               </div>
-              <button class="btn btn-sm btn-secondary" type="button" @click="addSilenceEntry">
+              <button v-permission="'ops.manage'" class="btn btn-sm btn-secondary" type="button" @click="addSilenceEntry">
                 {{ t('admin.ops.runtime.silencing.entries.add') }}
               </button>
             </div>
@@ -447,13 +447,13 @@ onMounted(() => {
                   <div class="text-xs font-bold text-gray-900 dark:text-white">
                     {{ t('admin.ops.runtime.silencing.entries.entryTitle', { n: idx + 1 }) }}
                   </div>
-                  <button class="btn btn-sm btn-danger" type="button" @click="removeSilenceEntry(idx)">{{ t('common.delete') }}</button>
+                  <button v-permission="'ops.manage'" class="btn btn-sm btn-danger" type="button" @click="removeSilenceEntry(idx)">{{ t('common.delete') }}</button>
                 </div>
 
                 <div class="grid grid-cols-1 gap-3 md:grid-cols-2">
                   <div>
                     <div class="mb-1 text-xs font-medium text-gray-600 dark:text-gray-300">{{ t('admin.ops.runtime.silencing.entries.ruleId') }}</div>
-                    <input
+                    <input v-permission="'ops.manage'"
                       :value="typeof (entry as any).rule_id === 'number' ? String((entry as any).rule_id) : ''"
                       type="text"
                       class="input font-mono text-sm"
@@ -464,7 +464,7 @@ onMounted(() => {
 
                   <div>
                     <div class="mb-1 text-xs font-medium text-gray-600 dark:text-gray-300">{{ t('admin.ops.runtime.silencing.entries.severities') }}</div>
-                    <input
+                    <input v-permission="'ops.manage'"
                       :value="Array.isArray((entry as any).severities) ? (entry as any).severities.join(', ') : ''"
                       type="text"
                       class="input font-mono text-sm"
@@ -526,7 +526,7 @@ onMounted(() => {
     <template #footer>
       <div class="flex justify-end gap-2">
         <button class="btn btn-secondary" @click="showAlertEditor = false">{{ t('common.cancel') }}</button>
-        <button class="btn btn-primary" :disabled="saving || !alertValidation.valid" @click="saveAlertSettings">
+        <button v-permission="'ops.manage'" class="btn btn-primary" :disabled="saving || !alertValidation.valid" @click="saveAlertSettings">
           {{ saving ? t('common.saving') : t('common.save') }}
         </button>
       </div>

@@ -1,5 +1,7 @@
 # UI Bridge v1
 
+> M7 的三个 schema2 示例均为 headless，ui_bridge=0，不使用 legacy config.load/save/test。配置、revision 和发布走 /plugin-instances API；见 [general-v1.md](general-v1.md)。
+
 ## 加载方式
 
 宿主为每次打开配置页创建短时 UI 会话：

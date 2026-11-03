@@ -140,7 +140,7 @@
                 </div>
 
                 <!-- Retry button -->
-                <button
+                <button v-permission="'@super'"
                   @click="handleUpdate"
                   :disabled="updating"
                   class="flex w-full items-center justify-center gap-2 rounded-lg bg-red-500 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-red-600 disabled:cursor-not-allowed disabled:opacity-50"
@@ -182,7 +182,7 @@
                 </div>
 
                 <!-- Restart button with countdown -->
-                <button
+                <button v-permission="'@super'"
                   @click="handleRestart"
                   :disabled="restarting"
                   class="flex w-full items-center justify-center gap-2 rounded-lg bg-green-500 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-green-600 disabled:cursor-not-allowed disabled:opacity-50"
@@ -318,7 +318,7 @@
                 </div>
 
                 <!-- Update button -->
-                <button
+                <button v-permission="'@super'"
                   @click="handleUpdate"
                   :disabled="updating"
                   class="flex w-full items-center justify-center gap-2 rounded-lg bg-primary-500 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-primary-600 disabled:cursor-not-allowed disabled:opacity-50"
@@ -583,7 +583,7 @@
                               {{ rollbackError }}
                             </p>
 
-                            <button
+                            <button v-permission="'@super'"
                               @click="handleRollback"
                               :disabled="rollingBack"
                               class="flex w-full items-center justify-center gap-2 rounded-lg bg-amber-500 px-4 py-2 text-sm font-medium text-white shadow-sm transition-colors hover:bg-amber-600 disabled:cursor-not-allowed disabled:opacity-50"
@@ -664,7 +664,7 @@ const props = defineProps<{
 const authStore = useAuthStore()
 const appStore = useAppStore()
 
-const isAdmin = computed(() => authStore.isAdmin)
+const isAdmin = computed(() => authStore.hasPermission('system.read'))
 
 const dropdownOpen = ref(false)
 const dropdownRef = ref<HTMLElement | null>(null)
@@ -752,6 +752,7 @@ async function refreshVersion(force = true) {
 }
 
 async function handleUpdate() {
+  if (!authStore.isSuperAdmin) return
   if (updating.value) return
 
   updating.value = true
@@ -826,6 +827,7 @@ function formatPublishedAt(publishedAt: string): string {
 }
 
 async function handleRollback() {
+  if (!authStore.isSuperAdmin) return
   if (!isAdmin.value) return
   if (rollingBack.value || !selectedRollbackVersion.value) return
 
@@ -849,6 +851,7 @@ async function handleRollback() {
 }
 
 async function handleRestart() {
+  if (!authStore.isSuperAdmin) return
   if (restarting.value) return
 
   restarting.value = true

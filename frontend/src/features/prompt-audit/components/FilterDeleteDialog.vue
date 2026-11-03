@@ -98,10 +98,10 @@
           {{ t(confirmDisabledReason) }}
         </p>
         <button type="button" class="btn btn-secondary" @click="$emit('close')">{{ t('common.cancel') }}</button>
-        <button type="button" class="btn btn-secondary" :disabled="!canPreview || previewing || deleting" data-test="run-delete-preview" @click="requestPreview">
+        <button v-permission="'prompt_audit.read'" type="button" class="btn btn-secondary" :disabled="!canPreview || previewing || deleting" data-test="run-delete-preview" @click="requestPreview">
           {{ previewing ? t('admin.promptAudit.events.filterDeletePreviewing') : t('admin.promptAudit.events.filterDeletePreviewAction') }}
         </button>
-        <button
+        <button v-permission="'prompt_audit.delete'"
           type="button"
           class="btn btn-danger"
           :disabled="confirmDisabled"

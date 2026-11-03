@@ -209,10 +209,20 @@ func (p *ChannelModelPricing) GetTierByLabel(label string) *PricingInterval {
 	return nil
 }
 
-// Clone 返回 ChannelModelPricing 的拷贝（切片和映射独立，价格指针字段共享，调用方只读安全）
+// Clone returns a deep copy with independent slices, maps, and price pointers.
 func (p ChannelModelPricing) Clone() ChannelModelPricing {
 	cp := p
 	cp.ReasoningEffortMultipliers = maps.Clone(p.ReasoningEffortMultipliers)
+	cp.InputPrice = cloneChannelPricingValue(p.InputPrice)
+	cp.OutputPrice = cloneChannelPricingValue(p.OutputPrice)
+	cp.CacheWritePrice = cloneChannelPricingValue(p.CacheWritePrice)
+	cp.CacheWrite1hPrice = cloneChannelPricingValue(p.CacheWrite1hPrice)
+	cp.CacheReadPrice = cloneChannelPricingValue(p.CacheReadPrice)
+	cp.FastMultiplier = cloneChannelPricingValue(p.FastMultiplier)
+	cp.FlexMultiplier = cloneChannelPricingValue(p.FlexMultiplier)
+	cp.ImageInputPrice = cloneChannelPricingValue(p.ImageInputPrice)
+	cp.ImageOutputPrice = cloneChannelPricingValue(p.ImageOutputPrice)
+	cp.PerRequestPrice = cloneChannelPricingValue(p.PerRequestPrice)
 	if p.Models != nil {
 		cp.Models = make([]string, len(p.Models))
 		copy(cp.Models, p.Models)
@@ -220,6 +230,19 @@ func (p ChannelModelPricing) Clone() ChannelModelPricing {
 	if p.Intervals != nil {
 		cp.Intervals = make([]PricingInterval, len(p.Intervals))
 		copy(cp.Intervals, p.Intervals)
+		for i := range cp.Intervals {
+			cp.Intervals[i].MaxTokens = cloneChannelPricingValue(p.Intervals[i].MaxTokens)
+			cp.Intervals[i].InputPrice = cloneChannelPricingValue(p.Intervals[i].InputPrice)
+			cp.Intervals[i].OutputPrice = cloneChannelPricingValue(p.Intervals[i].OutputPrice)
+			cp.Intervals[i].CacheWritePrice = cloneChannelPricingValue(p.Intervals[i].CacheWritePrice)
+			cp.Intervals[i].CacheWrite1hPrice = cloneChannelPricingValue(p.Intervals[i].CacheWrite1hPrice)
+			cp.Intervals[i].CacheReadPrice = cloneChannelPricingValue(p.Intervals[i].CacheReadPrice)
+			cp.Intervals[i].InputMultiplier = cloneChannelPricingValue(p.Intervals[i].InputMultiplier)
+			cp.Intervals[i].OutputMultiplier = cloneChannelPricingValue(p.Intervals[i].OutputMultiplier)
+			cp.Intervals[i].CacheWriteMultiplier = cloneChannelPricingValue(p.Intervals[i].CacheWriteMultiplier)
+			cp.Intervals[i].CacheReadMultiplier = cloneChannelPricingValue(p.Intervals[i].CacheReadMultiplier)
+			cp.Intervals[i].PerRequestPrice = cloneChannelPricingValue(p.Intervals[i].PerRequestPrice)
+		}
 	}
 	if p.TimePricing != nil {
 		cp.TimePricing = &ChannelTimePricing{
@@ -650,4 +673,13 @@ func (c *Channel) SupportedModels() []SupportedModel {
 		return result[i].Name < result[j].Name
 	})
 	return result
+}
+
+// Clone nullable price/interval values as well as their containing slices.
+func cloneChannelPricingValue[T any](p *T) *T {
+	if p == nil {
+		return nil
+	}
+	value := *p
+	return &value
 }

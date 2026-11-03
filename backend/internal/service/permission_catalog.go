@@ -1,0 +1,111 @@
+package service
+
+// PermissionDefinition describes one code-owned RBAC permission.
+type PermissionDefinition struct {
+	Code        string
+	Name        string
+	Resource    string
+	Action      string
+	Description string
+}
+
+// PermissionCatalog returns the code-owned permission directory.
+func PermissionCatalog() map[string]PermissionDefinition {
+	entries := []PermissionDefinition{
+		{Code: "accounts.export", Name: "Export accounts", Resource: "accounts", Action: "export"},
+		{Code: "accounts.import", Name: "Import accounts", Resource: "accounts", Action: "import"},
+		{Code: "affiliates.manage", Name: "Manage affiliates", Resource: "affiliates", Action: "manage"},
+		{Code: "affiliates.read", Name: "Read affiliates", Resource: "affiliates", Action: "read"},
+		{Code: "announcements.create", Name: "Create announcements", Resource: "announcements", Action: "create"},
+		{Code: "announcements.delete", Name: "Delete announcements", Resource: "announcements", Action: "delete"},
+		{Code: "announcements.read", Name: "Read announcements", Resource: "announcements", Action: "read"},
+		{Code: "announcements.update", Name: "Update announcements", Resource: "announcements", Action: "update"},
+		{Code: "api_keys.read", Name: "Read api keys", Resource: "api_keys", Action: "read"},
+		{Code: "api_keys.update", Name: "Update api keys", Resource: "api_keys", Action: "update"},
+		{Code: "audit_logs.delete", Name: "Delete audit logs", Resource: "audit_logs", Action: "delete"},
+		{Code: "backups.read", Name: "Read backups", Resource: "backups", Action: "read"},
+		{Code: "compliance.accept", Name: "Accept compliance", Resource: "compliance", Action: "accept"},
+		{Code: "compliance.read", Name: "Read compliance", Resource: "compliance", Action: "read"},
+		{Code: "dashboard.read", Name: "Read dashboard", Resource: "dashboard", Action: "read"},
+		{Code: "pages.read", Name: "Read pages", Resource: "pages", Action: "read"},
+		{Code: "payments.configure", Name: "Configure payments", Resource: "payments", Action: "configure"},
+		{Code: "payments.update", Name: "Update payments", Resource: "payments", Action: "update"},
+		{Code: "plugins.read", Name: "Read plugins", Resource: "plugins", Action: "read"},
+		{Code: "plugin_tasks.read", Name: "read plugin_tasks", Resource: "plugin_tasks", Action: "read"},
+		{Code: "plugin_tasks.create", Name: "create plugin_tasks", Resource: "plugin_tasks", Action: "create"},
+		{Code: "plugin_tasks.update", Name: "update plugin_tasks", Resource: "plugin_tasks", Action: "update"},
+		{Code: "plugin_tasks.delete", Name: "delete plugin_tasks", Resource: "plugin_tasks", Action: "delete"},
+		{Code: "plugin_tasks.run", Name: "run plugin_tasks", Resource: "plugin_tasks", Action: "run"},
+		{Code: "plugin_runs.read", Name: "read plugin_runs", Resource: "plugin_runs", Action: "read"},
+		{Code: "plugin_runs.sensitive", Name: "sensitive plugin_runs", Resource: "plugin_runs", Action: "sensitive"},
+		{Code: "plugin_instances.read", Name: "Read plugin instances", Resource: "plugin_instances", Action: "read"},
+		{Code: "plugin_instances.create", Name: "Create plugin instances", Resource: "plugin_instances", Action: "create"},
+		{Code: "plugin_instances.update", Name: "Update plugin instances", Resource: "plugin_instances", Action: "update"},
+		{Code: "plugin_instances.publish", Name: "Publish plugin instances", Resource: "plugin_instances", Action: "publish"},
+		{Code: "plugin_instances.delete", Name: "Delete plugin instances", Resource: "plugin_instances", Action: "delete"},
+		{Code: "plugin_instances.disable", Name: "Disable plugin instances", Resource: "plugin_instances", Action: "disable"},
+		{Code: "plugin_instances.bindings.update", Name: "Update plugin instance bindings", Resource: "plugin_instances", Action: "bindings.update"},
+		{Code: "promo_codes.create", Name: "Create promo codes", Resource: "promo_codes", Action: "create"},
+		{Code: "promo_codes.delete", Name: "Delete promo codes", Resource: "promo_codes", Action: "delete"},
+		{Code: "promo_codes.read", Name: "Read promo codes", Resource: "promo_codes", Action: "read"},
+		{Code: "promo_codes.update", Name: "Update promo codes", Resource: "promo_codes", Action: "update"},
+		{Code: "prompt_audit.delete", Name: "Delete prompt audit", Resource: "prompt_audit", Action: "delete"},
+		{Code: "prompt_audit.manage", Name: "Manage prompt audit", Resource: "prompt_audit", Action: "manage"},
+		{Code: "prompt_audit.read", Name: "Read prompt audit", Resource: "prompt_audit", Action: "read"},
+		{Code: "proxies.export", Name: "Export proxies", Resource: "proxies", Action: "export"},
+		{Code: "proxies.import", Name: "Import proxies", Resource: "proxies", Action: "import"},
+		{Code: "redeem_codes.create", Name: "Create redeem codes", Resource: "redeem_codes", Action: "create"},
+		{Code: "redeem_codes.delete", Name: "Delete redeem codes", Resource: "redeem_codes", Action: "delete"},
+		{Code: "redeem_codes.export", Name: "Export redeem codes", Resource: "redeem_codes", Action: "export"},
+		{Code: "redeem_codes.read", Name: "Read redeem codes", Resource: "redeem_codes", Action: "read"},
+		{Code: "redeem_codes.update", Name: "Update redeem codes", Resource: "redeem_codes", Action: "update"},
+		{Code: "risk_control.manage", Name: "Manage risk control", Resource: "risk_control", Action: "manage"},
+		{Code: "risk_control.read", Name: "Read risk control", Resource: "risk_control", Action: "read"},
+		{Code: "system.read", Name: "Read system", Resource: "system", Action: "read"},
+		{Code: "usage.manage", Name: "Manage usage", Resource: "usage", Action: "manage"},
+		{Code: "usage.read", Name: "Read usage", Resource: "usage", Action: "read"},
+		{Code: "user_attributes.manage", Name: "Manage user attributes", Resource: "user_attributes", Action: "manage"},
+		{Code: "user_attributes.read", Name: "Read user attributes", Resource: "user_attributes", Action: "read"},
+		{Code: "users.read", Name: "Read users", Resource: "users", Action: "read"},
+		{Code: "users.create", Name: "Create users", Resource: "users", Action: "create"},
+		{Code: "users.update", Name: "Update users", Resource: "users", Action: "update"},
+		{Code: "users.delete", Name: "Delete users", Resource: "users", Action: "delete"},
+		{Code: "users.roles.assign", Name: "Assign user roles", Resource: "users", Action: "roles.assign"},
+		{Code: "roles.read", Name: "Read roles", Resource: "roles", Action: "read"},
+		{Code: "roles.create", Name: "Create roles", Resource: "roles", Action: "create"},
+		{Code: "roles.update", Name: "Update roles", Resource: "roles", Action: "update"},
+		{Code: "roles.delete", Name: "Delete roles", Resource: "roles", Action: "delete"},
+		{Code: "roles.permissions.assign", Name: "Assign role permissions", Resource: "roles", Action: "permissions.assign"},
+		{Code: "permissions.read", Name: "Read permissions", Resource: "permissions", Action: "read"},
+		{Code: "accounts.read", Name: "Read accounts", Resource: "accounts", Action: "read"},
+		{Code: "accounts.create", Name: "Create accounts", Resource: "accounts", Action: "create"},
+		{Code: "accounts.update", Name: "Update accounts", Resource: "accounts", Action: "update"},
+		{Code: "accounts.delete", Name: "Delete accounts", Resource: "accounts", Action: "delete"},
+		{Code: "channels.read", Name: "Read channels", Resource: "channels", Action: "read"},
+		{Code: "channels.create", Name: "Create channels", Resource: "channels", Action: "create"},
+		{Code: "channels.update", Name: "Update channels", Resource: "channels", Action: "update"},
+		{Code: "channels.delete", Name: "Delete channels", Resource: "channels", Action: "delete"},
+		{Code: "proxies.read", Name: "Read proxies", Resource: "proxies", Action: "read"},
+		{Code: "proxies.create", Name: "Create proxies", Resource: "proxies", Action: "create"},
+		{Code: "proxies.update", Name: "Update proxies", Resource: "proxies", Action: "update"},
+		{Code: "proxies.delete", Name: "Delete proxies", Resource: "proxies", Action: "delete"},
+		{Code: "groups.read", Name: "Read groups", Resource: "groups", Action: "read"},
+		{Code: "groups.create", Name: "Create groups", Resource: "groups", Action: "create"},
+		{Code: "groups.update", Name: "Update groups", Resource: "groups", Action: "update"},
+		{Code: "groups.delete", Name: "Delete groups", Resource: "groups", Action: "delete"},
+		{Code: "subscriptions.read", Name: "Read subscriptions", Resource: "subscriptions", Action: "read"},
+		{Code: "subscriptions.update", Name: "Update subscriptions", Resource: "subscriptions", Action: "update"},
+		{Code: "payments.read", Name: "Read payments", Resource: "payments", Action: "read"},
+		{Code: "payments.refund", Name: "Refund payments", Resource: "payments", Action: "refund"},
+		{Code: "settings.read", Name: "Read settings", Resource: "settings", Action: "read"},
+		{Code: "settings.update", Name: "Update settings", Resource: "settings", Action: "update"},
+		{Code: "audit_logs.read", Name: "Read audit logs", Resource: "audit_logs", Action: "read"},
+		{Code: "ops.read", Name: "Read operations", Resource: "ops", Action: "read"},
+		{Code: "ops.manage", Name: "Manage operations", Resource: "ops", Action: "manage"},
+	}
+	catalog := make(map[string]PermissionDefinition, len(entries))
+	for _, entry := range entries {
+		catalog[entry.Code] = entry
+	}
+	return catalog
+}

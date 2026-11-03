@@ -5,6 +5,7 @@
     width="normal"
     @close="$emit('close')"
   >
+    <p v-if="!auth.hasPermission('users.create')" role="status">{{ rt('rbac.readOnly') }}</p>
     <form id="create-user-form" @submit.prevent="submit" class="space-y-5">
       <div>
         <label class="input-label">{{ t('admin.users.email') }}</label>
@@ -25,7 +26,7 @@
         <label class="input-label">{{ t('admin.users.username') }}</label>
         <input v-model="form.username" type="text" class="input" :placeholder="t('admin.users.enterUsername')" />
       </div>
-      <div>
+      <div v-if="auth.isSuperAdmin">
         <label class="input-label">{{ t('admin.users.form.roleLabel') }}</label>
         <select v-model="form.role" class="input">
           <option value="user">{{ t('admin.users.roles.user') }}</option>
@@ -58,7 +59,7 @@
     <template #footer>
       <div class="flex justify-end gap-3">
         <button @click="$emit('close')" type="button" class="btn btn-secondary">{{ t('common.cancel') }}</button>
-        <button type="submit" form="create-user-form" :disabled="loading" class="btn btn-primary">
+        <button type="submit" form="create-user-form" :disabled="loading || !auth.hasPermission('users.create')" class="btn btn-primary">
           {{ loading ? t('admin.users.creating') : t('common.create') }}
         </button>
       </div>
@@ -73,6 +74,8 @@
 import { reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'; import { adminAPI } from '@/api/admin'
 import { useAppStore } from '@/stores/app'
+import { useAuthStore } from '@/stores/auth'
+import { rbacMessages } from '@/components/admin/rbac/messages'
 import BaseDialog from '@/components/common/BaseDialog.vue'
 import Icon from '@/components/icons/Icon.vue'
 import { useStepUp, isStepUpBlocked, isStepUpCancelled, stepUpBlockReason } from '@/composables/useStepUp'
@@ -81,6 +84,8 @@ import TotpStepUpDialog from '@/components/auth/TotpStepUpDialog.vue'
 const props = defineProps<{ show: boolean }>()
 const emit = defineEmits(['close', 'success']); const { t } = useI18n()
 const appStore = useAppStore()
+const auth = useAuthStore()
+const { t: rt } = useI18n({ useScope: 'local', messages: rbacMessages })
 
 const form = reactive({ email: '', password: '', username: '', notes: '', role: 'user' as 'user' | 'admin', balance: '', concurrency: 1, rpm_limit: 0 })
 
@@ -88,7 +93,7 @@ const stepUp = useStepUp()
 const loading = ref(false)
 
 const submit = async () => {
-  if (loading.value) return
+  if (loading.value || !auth.hasPermission('users.create')) return
   loading.value = true
   try {
     const { balance: rawBalance, ...rest } = { ...form }
@@ -98,7 +103,11 @@ const submit = async () => {
       payload.balance = Number(balance)
     }
     // 创建管理员属敏感操作：后端返回 STEP_UP_REQUIRED 时弹 TOTP 验证并重试
-    await stepUp.run(() => adminAPI.users.create(payload))
+    await stepUp.run(() => {
+      if (!auth.hasPermission('users.create')) throw new Error(rt('rbac.readOnly'))
+      // Recheck on every step-up retry, not just when the form was opened.
+      return adminAPI.users.create({ ...payload, role: auth.isSuperAdmin ? payload.role : 'user' })
+    })
     appStore.showSuccess(t('admin.users.userCreated'))
     emit('success'); emit('close')
   } catch (e: any) {

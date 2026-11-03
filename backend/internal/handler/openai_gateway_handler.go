@@ -42,6 +42,7 @@ type OpenAIGatewayHandler struct {
 	usageRecordWorkerPool      *service.UsageRecordWorkerPool
 	errorPassthroughService    *service.ErrorPassthroughService
 	contentModerationService   *service.ContentModerationService
+	resultCacheService         *service.ResultCacheService
 	securityAuditCoordinator   *securityaudit.Coordinator
 	grokMediaEligibilityProber grokMediaEligibilityProber
 	opsService                 *service.OpsService
@@ -256,7 +257,7 @@ func usageRecordContext(parent context.Context, base context.Context) context.Co
 	if requestID, _ := parent.Value(ctxkey.RequestID).(string); strings.TrimSpace(requestID) != "" {
 		base = context.WithValue(base, ctxkey.RequestID, strings.TrimSpace(requestID))
 	}
-	return base
+	return service.CopyResultCacheUsageContext(base, parent)
 }
 
 // wrapUsageRecordTaskContext 包装计费任务：复制请求级 context 值，并接管请求的在途余额预留引用。

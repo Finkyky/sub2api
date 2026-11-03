@@ -1,0 +1,41 @@
+{
+  "schema_version": 2,
+  "id": "examples.sub2api.business-output",
+  "name": "business-output",
+  "version": "1.0.0",
+  "description": "M7 headless general.v1 example",
+  "author": "Sub2API examples",
+  "requires": {
+    "sub2api": ">=0.1.0 <1.0.0",
+    "plugin_protocol": 1,
+    "general_api": 1,
+    "transport_api": 0,
+    "ui_bridge": 0
+  },
+  "capabilities": [
+    {
+      "id": "request.hook.v1"
+    }
+  ],
+  "general": {
+    "config_version": 1,
+    "hooks": [
+      {
+        "name": "business-output",
+        "stages": [
+          "output"
+        ],
+        "protocols": [
+          "openai.chat_completions.v1",
+          "openai.responses.v1",
+          "anthropic.messages.v1",
+          "gemini.generate_content.v1"
+        ],
+        "can_replace": false
+      }
+    ]
+  },
+  "runtimes": {},
+  "ui": {},
+  "files": {}
+}

@@ -75,6 +75,9 @@ type PaymentProviderInstance func(*sql.Selector)
 // PendingAuthSession is the predicate function for pendingauthsession builders.
 type PendingAuthSession func(*sql.Selector)
 
+// Permission is the predicate function for permission builders.
+type Permission func(*sql.Selector)
+
 // PromoCode is the predicate function for promocode builders.
 type PromoCode func(*sql.Selector)
 
@@ -86,6 +89,12 @@ type Proxy func(*sql.Selector)
 
 // RedeemCode is the predicate function for redeemcode builders.
 type RedeemCode func(*sql.Selector)
+
+// Role is the predicate function for role builders.
+type Role func(*sql.Selector)
+
+// RolePermission is the predicate function for rolepermission builders.
+type RolePermission func(*sql.Selector)
 
 // SecuritySecret is the predicate function for securitysecret builders.
 type SecuritySecret func(*sql.Selector)
@@ -119,6 +128,9 @@ type UserAttributeValue func(*sql.Selector)
 
 // UserPlatformQuota is the predicate function for userplatformquota builders.
 type UserPlatformQuota func(*sql.Selector)
+
+// UserRole is the predicate function for userrole builders.
+type UserRole func(*sql.Selector)
 
 // UserSubscription is the predicate function for usersubscription builders.
 type UserSubscription func(*sql.Selector)

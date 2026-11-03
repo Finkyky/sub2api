@@ -136,6 +136,8 @@ const (
 	FieldMessagesDispatchModelConfig = "messages_dispatch_model_config"
 	// FieldModelAllowlist holds the string denoting the model_allowlist field in the database.
 	FieldModelAllowlist = "model_allowlist"
+	// FieldResponseResultCacheConfig holds the string denoting the response_result_cache_config field in the database.
+	FieldResponseResultCacheConfig = "response_result_cache_config"
 	// FieldCodexModelsManifestConfig holds the string denoting the codex_models_manifest_config field in the database.
 	FieldCodexModelsManifestConfig = "codex_models_manifest_config"
 	// FieldRpmLimit holds the string denoting the rpm_limit field in the database.
@@ -287,6 +289,7 @@ var Columns = []string{
 	FieldDefaultMappedModel,
 	FieldMessagesDispatchModelConfig,
 	FieldModelAllowlist,
+	FieldResponseResultCacheConfig,
 	FieldCodexModelsManifestConfig,
 	FieldRpmLimit,
 	FieldMaxReasoningEffort,
@@ -424,6 +427,8 @@ var (
 	DefaultMessagesDispatchModelConfig domain.OpenAIMessagesDispatchModelConfig
 	// DefaultModelAllowlist holds the default value on creation for the "model_allowlist" field.
 	DefaultModelAllowlist domain.GroupModelAllowlist
+	// DefaultResponseResultCacheConfig holds the default value on creation for the "response_result_cache_config" field.
+	DefaultResponseResultCacheConfig func() domain.GroupResponseResultCacheConfig
 	// DefaultCodexModelsManifestConfig holds the default value on creation for the "codex_models_manifest_config" field.
 	DefaultCodexModelsManifestConfig domain.GroupCodexModelsManifestConfig
 	// DefaultRpmLimit holds the default value on creation for the "rpm_limit" field.

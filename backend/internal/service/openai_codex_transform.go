@@ -157,9 +157,37 @@ var openAIChatGPTInternalUnsupportedFields = []string{
 	"metadata",
 	"prompt_cache_retention",
 	"safety_identifier",
-	"stream_options",
 	"truncation",
 	"stop_sequences",
+}
+
+const (
+	codexStreamOptionsField                    = "stream_options"
+	codexReasoningSummaryDeliveryField         = "reasoning_summary_delivery"
+	codexReasoningSummaryDeliverySequentialCut = "sequential_cutoff"
+)
+
+// normalizeCodexStreamOptions keeps the only stream option emitted by the
+// current Codex Responses request (StreamOptions in codex-api/src/common.rs)
+// and removes compatibility-only fields such as include_usage. A present but
+// empty/invalid object is removed instead of being forwarded.
+func normalizeCodexStreamOptions(value any) (normalized any, keep bool, changed bool) {
+	options, ok := value.(map[string]any)
+	if !ok {
+		return nil, false, true
+	}
+	delivery, hasDelivery := options[codexReasoningSummaryDeliveryField]
+	if !hasDelivery {
+		return nil, false, true
+	}
+	deliveryValue, ok := delivery.(string)
+	if !ok || deliveryValue != codexReasoningSummaryDeliverySequentialCut {
+		return nil, false, true
+	}
+	if len(options) == 1 {
+		return options, true, false
+	}
+	return map[string]any{codexReasoningSummaryDeliveryField: deliveryValue}, true, true
 }
 
 var openAICodexOAuthUnsupportedFields = append([]string{

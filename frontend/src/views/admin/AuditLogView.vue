@@ -73,7 +73,7 @@
               <button type="button" class="btn btn-secondary" :disabled="loading" @click="resetFilters">
                 {{ t('common.reset') }}
               </button>
-              <button type="button" class="btn btn-danger" @click="openClearDialog">
+              <button v-permission="'audit_logs.delete'" type="button" class="btn btn-danger" @click="openClearDialog">
                 <Icon name="trash" size="sm" class="mr-1.5" />
                 {{ t('admin.audit.clearAll') }}
               </button>
@@ -302,7 +302,7 @@
     </BaseDialog>
 
     <!-- Clear confirmation → step-up TOTP -->
-    <ConfirmDialog
+    <ConfirmDialog v-if="can('audit_logs.delete')"
       :show="clearConfirmVisible"
       :title="t('admin.audit.clearConfirm.title')"
       :message="t('admin.audit.clearConfirm.message')"
@@ -323,7 +323,7 @@
     >
       <div class="py-2">
         <p class="text-sm text-gray-500 dark:text-gray-400">{{ t('admin.audit.clearConfirm.totpHint') }}</p>
-        <input
+        <input v-permission="'audit_logs.delete'"
           v-model.trim="clearTotpCode"
           type="text"
           inputmode="numeric"
@@ -338,7 +338,7 @@
         <button type="button" class="btn btn-secondary" :disabled="clearing" @click="cancelClearTotp">
           {{ t('common.cancel') }}
         </button>
-        <button
+        <button v-permission="'audit_logs.delete'"
           type="button"
           class="btn btn-danger"
           :disabled="clearing || clearTotpCode.length !== 6"
@@ -352,6 +352,8 @@
 </template>
 
 <script setup lang="ts">
+import { usePermission } from '@/composables/usePermission'
+const { can } = usePermission()
 import { computed, onMounted, reactive, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { adminAPI, type AuditLog } from '@/api/admin'

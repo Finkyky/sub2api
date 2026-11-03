@@ -1,3 +1,4 @@
+import '@/permissions/__tests__/authorizedFixture'
 import { describe, expect, it, vi, beforeEach } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
 import { nextTick } from 'vue'

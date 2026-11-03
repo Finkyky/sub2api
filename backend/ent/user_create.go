@@ -19,10 +19,12 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/pendingauthsession"
 	"github.com/Wei-Shaw/sub2api/ent/promocodeusage"
 	"github.com/Wei-Shaw/sub2api/ent/redeemcode"
+	"github.com/Wei-Shaw/sub2api/ent/role"
 	"github.com/Wei-Shaw/sub2api/ent/usagelog"
 	"github.com/Wei-Shaw/sub2api/ent/user"
 	"github.com/Wei-Shaw/sub2api/ent/userattributevalue"
 	"github.com/Wei-Shaw/sub2api/ent/userplatformquota"
+	"github.com/Wei-Shaw/sub2api/ent/userrole"
 	"github.com/Wei-Shaw/sub2api/ent/usersubscription"
 )
 
@@ -563,6 +565,36 @@ func (_c *UserCreate) AddPlatformQuotas(v ...*UserPlatformQuota) *UserCreate {
 	return _c.AddPlatformQuotaIDs(ids...)
 }
 
+// AddRoleIDs adds the "roles" edge to the Role entity by IDs.
+func (_c *UserCreate) AddRoleIDs(ids ...int64) *UserCreate {
+	_c.mutation.AddRoleIDs(ids...)
+	return _c
+}
+
+// AddRoles adds the "roles" edges to the Role entity.
+func (_c *UserCreate) AddRoles(v ...*Role) *UserCreate {
+	ids := make([]int64, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _c.AddRoleIDs(ids...)
+}
+
+// AddUserRoleIDs adds the "user_roles" edge to the UserRole entity by IDs.
+func (_c *UserCreate) AddUserRoleIDs(ids ...int64) *UserCreate {
+	_c.mutation.AddUserRoleIDs(ids...)
+	return _c
+}
+
+// AddUserRoles adds the "user_roles" edges to the UserRole entity.
+func (_c *UserCreate) AddUserRoles(v ...*UserRole) *UserCreate {
+	ids := make([]int64, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _c.AddUserRoleIDs(ids...)
+}
+
 // Mutation returns the UserMutation object of the builder.
 func (_c *UserCreate) Mutation() *UserMutation {
 	return _c.mutation
@@ -1098,6 +1130,38 @@ func (_c *UserCreate) createSpec() (*User, *sqlgraph.CreateSpec) {
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(userplatformquota.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges = append(_spec.Edges, edge)
+	}
+	if nodes := _c.mutation.RolesIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2M,
+			Inverse: false,
+			Table:   user.RolesTable,
+			Columns: user.RolesPrimaryKey,
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(role.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges = append(_spec.Edges, edge)
+	}
+	if nodes := _c.mutation.UserRolesIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: true,
+			Table:   user.UserRolesTable,
+			Columns: []string{user.UserRolesColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(userrole.FieldID, field.TypeInt64),
 			},
 		}
 		for _, k := range nodes {

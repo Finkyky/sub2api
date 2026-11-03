@@ -1,0 +1,36 @@
+{
+  "schema_version": 2,
+  "id": "examples.sub2api.pricing-sync",
+  "name": "pricing-sync",
+  "version": "1.0.0",
+  "description": "M7 headless general.v1 example",
+  "author": "Sub2API examples",
+  "requires": {
+    "sub2api": ">=0.1.0 <1.0.0",
+    "plugin_protocol": 1,
+    "general_api": 1,
+    "transport_api": 0,
+    "ui_bridge": 0
+  },
+  "capabilities": [
+    {
+      "id": "independent.task.v1"
+    }
+  ],
+  "general": {
+    "config_version": 1,
+    "tasks": [
+      {
+        "name": "pricing-sync"
+      }
+    ],
+    "host_capabilities": [
+      "host.channel.pricing.read.v1",
+      "host.channel.pricing.write.v1",
+      "host.network.read.v1"
+    ]
+  },
+  "runtimes": {},
+  "ui": {},
+  "files": {}
+}

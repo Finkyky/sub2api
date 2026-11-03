@@ -1,5 +1,7 @@
 # 插件开发指南
 
+> schema2/general.v1 的三个真实可打包示例与 SDK：见 [general-v1.md](general-v1.md) 和 backend/examples/general-plugins/。本文后续 TransportPlugin 方法针对 legacy schema1。
+
 ## 稳定边界
 
 当前宿主只支持 `openai.oauth.outbound_transport.v1`。插件负责建立实际上游 HTTP/TLS 连接，Sub2API 负责账号选择、OAuth Token 生命周期、下游协议、响应解析、SSE、错误映射、用量统计和计费。

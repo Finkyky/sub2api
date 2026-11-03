@@ -17,6 +17,8 @@ vi.mock('@/api/admin', () => ({
   }
 }))
 
+vi.mock('@/stores/auth', () => ({ useAuthStore: () => ({ isSuperAdmin: true, hasPermission: () => true }) }))
+
 vi.mock('@/stores/app', () => ({
   useAppStore: () => ({ showSuccess, showError })
 }))
@@ -45,7 +47,7 @@ const mountModal = (concurrency: number) => mount(UserEditModal, {
         props: ['show', 'title'],
         template: '<div v-if="show"><slot /><slot name="footer" /></div>'
       },
-      Select: true,
+      UserRoleSelector: { template: '<div />', methods: { validate: () => undefined, save: async () => undefined } },
       Icon: true,
       UserAttributeForm: true,
       TotpStepUpDialog: true

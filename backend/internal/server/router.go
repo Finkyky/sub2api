@@ -36,6 +36,7 @@ func SetupRouter(
 	compositeResolver *service.CompositeRouteResolver,
 	cfg *config.Config,
 	redisClient *redis.Client,
+	rbac ...*service.RBACService,
 ) *gin.Engine {
 	middleware2.SetIngressRejectRecorder(opsService)
 	// 缓存 iframe 页面的 origin 列表，用于动态注入 CSP frame-src
@@ -90,7 +91,7 @@ func SetupRouter(
 	}
 
 	// 注册路由
-	registerRoutes(r, handlers, jwtAuth, optionalJWTAuth, adminAuth, apiKeyAuth, auditLog, stepUpAuth, apiKeyService, subscriptionService, opsService, settingService, compositeResolver, cfg, redisClient)
+	registerRoutes(r, handlers, jwtAuth, optionalJWTAuth, adminAuth, apiKeyAuth, auditLog, stepUpAuth, apiKeyService, subscriptionService, opsService, settingService, compositeResolver, cfg, redisClient, rbac...)
 
 	return r
 }
@@ -112,6 +113,7 @@ func registerRoutes(
 	compositeResolver *service.CompositeRouteResolver,
 	cfg *config.Config,
 	redisClient *redis.Client,
+	rbac ...*service.RBACService,
 ) {
 	// 通用路由（健康检查、状态等）
 	routes.RegisterCommonRoutes(r)
@@ -127,11 +129,18 @@ func registerRoutes(
 	routes.RegisterAuthRoutes(v1, h, jwtAuth, auditLog, redisClient, settingService, panelRateLimiter)
 	routes.RegisterUserRoutes(v1, h, jwtAuth, auditLog, settingService, panelRateLimiter)
 	routes.RegisterModelPlazaRoutes(v1, h, optionalJWTAuth, settingService, panelRateLimiter)
-	routes.RegisterAdminRoutes(v1, h, adminAuth, auditLog, stepUpAuth, settingService, panelRateLimiter)
-	routes.RegisterMCPRoutes(v1, h, auditLog, stepUpAuth, settingService, panelRateLimiter, cfg.CORS.AllowedOrigins, redisClient)
+	routes.RegisterAdminRoutes(v1, h, adminAuth, auditLog, stepUpAuth, settingService, panelRateLimiter, rbacToChecker(rbac))
+	routes.RegisterMCPRoutes(v1, h, auditLog, stepUpAuth, settingService, panelRateLimiter, cfg.CORS.AllowedOrigins, redisClient, rbacToChecker(rbac))
 	routes.RegisterMCPOAuthRoutes(r, v1, h, redisClient)
 	routes.RegisterGatewayRoutes(r, h, apiKeyAuth, apiKeyService, subscriptionService, opsService, settingService, compositeResolver, cfg)
-	routes.RegisterPaymentRoutes(v1, h.Payment, h.PaymentWebhook, h.Admin.Payment, jwtAuth, adminAuth, auditLog, settingService, panelRateLimiter, redisClient)
+	routes.RegisterPaymentRoutes(v1, h.Payment, h.PaymentWebhook, h.Admin.Payment, jwtAuth, adminAuth, auditLog, settingService, panelRateLimiter, redisClient, rbacToChecker(rbac))
 
-	handler.RegisterPageRoutes(v1, cfg.Pricing.DataDir, gin.HandlerFunc(jwtAuth), gin.HandlerFunc(adminAuth), settingService)
+	handler.RegisterPageRoutes(v1, cfg.Pricing.DataDir, gin.HandlerFunc(jwtAuth), gin.HandlerFunc(adminAuth), settingService, rbacToChecker(rbac))
+}
+
+func rbacToChecker(rbac []*service.RBACService) middleware2.PermissionChecker {
+	if len(rbac) == 0 || rbac[0] == nil {
+		return nil
+	}
+	return rbac[0]
 }

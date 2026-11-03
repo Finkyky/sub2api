@@ -1,6 +1,6 @@
 <template>
   <BaseDialog :show="show" :title="plan ? t('payment.admin.editPlan') : t('payment.admin.createPlan')" width="wide" @close="emit('close')">
-    <form id="plan-form" @submit.prevent="handleSavePlan" class="space-y-4">
+    <form v-permission="'payments.configure'" id="plan-form" @submit.prevent="handleSavePlan" class="space-y-4">
       <div class="grid grid-cols-2 gap-4">
         <div>
           <label class="input-label">{{ t('payment.admin.planName') }} <span class="text-red-500">*</span></label>
@@ -84,7 +84,7 @@
     <template #footer>
       <div class="flex justify-end gap-3">
         <button type="button" @click="emit('close')" class="btn btn-secondary">{{ t('common.cancel') }}</button>
-        <button type="submit" form="plan-form" :disabled="saving" class="btn btn-primary">{{ saving ? t('common.saving') : t('common.save') }}</button>
+        <button v-permission="'payments.configure'" type="submit" form="plan-form" :disabled="saving" class="btn btn-primary">{{ saving ? t('common.saving') : t('common.save') }}</button>
       </div>
     </template>
   </BaseDialog>

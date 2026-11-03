@@ -28,10 +28,12 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/paymentorder"
 	"github.com/Wei-Shaw/sub2api/ent/paymentproviderinstance"
 	"github.com/Wei-Shaw/sub2api/ent/pendingauthsession"
+	"github.com/Wei-Shaw/sub2api/ent/permission"
 	"github.com/Wei-Shaw/sub2api/ent/promocode"
 	"github.com/Wei-Shaw/sub2api/ent/promocodeusage"
 	"github.com/Wei-Shaw/sub2api/ent/proxy"
 	"github.com/Wei-Shaw/sub2api/ent/redeemcode"
+	"github.com/Wei-Shaw/sub2api/ent/role"
 	"github.com/Wei-Shaw/sub2api/ent/schema"
 	"github.com/Wei-Shaw/sub2api/ent/securitysecret"
 	"github.com/Wei-Shaw/sub2api/ent/setting"
@@ -1209,40 +1211,44 @@ func init() {
 	groupDescModelAllowlist := groupFields[56].Descriptor()
 	// group.DefaultModelAllowlist holds the default value on creation for the model_allowlist field.
 	group.DefaultModelAllowlist = groupDescModelAllowlist.Default.(domain.GroupModelAllowlist)
+	// groupDescResponseResultCacheConfig is the schema descriptor for response_result_cache_config field.
+	groupDescResponseResultCacheConfig := groupFields[57].Descriptor()
+	// group.DefaultResponseResultCacheConfig holds the default value on creation for the response_result_cache_config field.
+	group.DefaultResponseResultCacheConfig = groupDescResponseResultCacheConfig.Default.(func() domain.GroupResponseResultCacheConfig)
 	// groupDescCodexModelsManifestConfig is the schema descriptor for codex_models_manifest_config field.
-	groupDescCodexModelsManifestConfig := groupFields[57].Descriptor()
+	groupDescCodexModelsManifestConfig := groupFields[58].Descriptor()
 	// group.DefaultCodexModelsManifestConfig holds the default value on creation for the codex_models_manifest_config field.
 	group.DefaultCodexModelsManifestConfig = groupDescCodexModelsManifestConfig.Default.(domain.GroupCodexModelsManifestConfig)
 	// groupDescRpmLimit is the schema descriptor for rpm_limit field.
-	groupDescRpmLimit := groupFields[58].Descriptor()
+	groupDescRpmLimit := groupFields[59].Descriptor()
 	// group.DefaultRpmLimit holds the default value on creation for the rpm_limit field.
 	group.DefaultRpmLimit = groupDescRpmLimit.Default.(int)
 	// groupDescMaxReasoningEffort is the schema descriptor for max_reasoning_effort field.
-	groupDescMaxReasoningEffort := groupFields[59].Descriptor()
+	groupDescMaxReasoningEffort := groupFields[60].Descriptor()
 	// group.DefaultMaxReasoningEffort holds the default value on creation for the max_reasoning_effort field.
 	group.DefaultMaxReasoningEffort = groupDescMaxReasoningEffort.Default.(string)
 	// group.MaxReasoningEffortValidator is a validator for the "max_reasoning_effort" field. It is called by the builders before save.
 	group.MaxReasoningEffortValidator = groupDescMaxReasoningEffort.Validators[0].(func(string) error)
 	// groupDescMaxReasoningEffortOverLimit is the schema descriptor for max_reasoning_effort_over_limit field.
-	groupDescMaxReasoningEffortOverLimit := groupFields[60].Descriptor()
+	groupDescMaxReasoningEffortOverLimit := groupFields[61].Descriptor()
 	// group.DefaultMaxReasoningEffortOverLimit holds the default value on creation for the max_reasoning_effort_over_limit field.
 	group.DefaultMaxReasoningEffortOverLimit = groupDescMaxReasoningEffortOverLimit.Default.(string)
 	// group.MaxReasoningEffortOverLimitValidator is a validator for the "max_reasoning_effort_over_limit" field. It is called by the builders before save.
 	group.MaxReasoningEffortOverLimitValidator = groupDescMaxReasoningEffortOverLimit.Validators[0].(func(string) error)
 	// groupDescReasoningEffortMappings is the schema descriptor for reasoning_effort_mappings field.
-	groupDescReasoningEffortMappings := groupFields[61].Descriptor()
+	groupDescReasoningEffortMappings := groupFields[62].Descriptor()
 	// group.DefaultReasoningEffortMappings holds the default value on creation for the reasoning_effort_mappings field.
 	group.DefaultReasoningEffortMappings = groupDescReasoningEffortMappings.Default.([]domain.ReasoningEffortMapping)
 	// groupDescProfitControlEnabled is the schema descriptor for profit_control_enabled field.
-	groupDescProfitControlEnabled := groupFields[62].Descriptor()
+	groupDescProfitControlEnabled := groupFields[63].Descriptor()
 	// group.DefaultProfitControlEnabled holds the default value on creation for the profit_control_enabled field.
 	group.DefaultProfitControlEnabled = groupDescProfitControlEnabled.Default.(bool)
 	// groupDescProfitMinMargin is the schema descriptor for profit_min_margin field.
-	groupDescProfitMinMargin := groupFields[63].Descriptor()
+	groupDescProfitMinMargin := groupFields[64].Descriptor()
 	// group.DefaultProfitMinMargin holds the default value on creation for the profit_min_margin field.
 	group.DefaultProfitMinMargin = groupDescProfitMinMargin.Default.(float64)
 	// groupDescProfitSafetyBuffer is the schema descriptor for profit_safety_buffer field.
-	groupDescProfitSafetyBuffer := groupFields[64].Descriptor()
+	groupDescProfitSafetyBuffer := groupFields[65].Descriptor()
 	// group.DefaultProfitSafetyBuffer holds the default value on creation for the profit_safety_buffer field.
 	group.DefaultProfitSafetyBuffer = groupDescProfitSafetyBuffer.Default.(float64)
 	idempotencyrecordMixin := schema.IdempotencyRecord{}.Mixin()
@@ -1592,6 +1598,93 @@ func init() {
 	pendingauthsessionDescCompletionCodeHash := pendingauthsessionFields[12].Descriptor()
 	// pendingauthsession.DefaultCompletionCodeHash holds the default value on creation for the completion_code_hash field.
 	pendingauthsession.DefaultCompletionCodeHash = pendingauthsessionDescCompletionCodeHash.Default.(string)
+	permissionMixin := schema.Permission{}.Mixin()
+	permissionMixinFields0 := permissionMixin[0].Fields()
+	_ = permissionMixinFields0
+	permissionFields := schema.Permission{}.Fields()
+	_ = permissionFields
+	// permissionDescCreatedAt is the schema descriptor for created_at field.
+	permissionDescCreatedAt := permissionMixinFields0[0].Descriptor()
+	// permission.DefaultCreatedAt holds the default value on creation for the created_at field.
+	permission.DefaultCreatedAt = permissionDescCreatedAt.Default.(func() time.Time)
+	// permissionDescUpdatedAt is the schema descriptor for updated_at field.
+	permissionDescUpdatedAt := permissionMixinFields0[1].Descriptor()
+	// permission.DefaultUpdatedAt holds the default value on creation for the updated_at field.
+	permission.DefaultUpdatedAt = permissionDescUpdatedAt.Default.(func() time.Time)
+	// permission.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
+	permission.UpdateDefaultUpdatedAt = permissionDescUpdatedAt.UpdateDefault.(func() time.Time)
+	// permissionDescCode is the schema descriptor for code field.
+	permissionDescCode := permissionFields[0].Descriptor()
+	// permission.CodeValidator is a validator for the "code" field. It is called by the builders before save.
+	permission.CodeValidator = func() func(string) error {
+		validators := permissionDescCode.Validators
+		fns := [...]func(string) error{
+			validators[0].(func(string) error),
+			validators[1].(func(string) error),
+		}
+		return func(code string) error {
+			for _, fn := range fns {
+				if err := fn(code); err != nil {
+					return err
+				}
+			}
+			return nil
+		}
+	}()
+	// permissionDescName is the schema descriptor for name field.
+	permissionDescName := permissionFields[1].Descriptor()
+	// permission.NameValidator is a validator for the "name" field. It is called by the builders before save.
+	permission.NameValidator = func() func(string) error {
+		validators := permissionDescName.Validators
+		fns := [...]func(string) error{
+			validators[0].(func(string) error),
+			validators[1].(func(string) error),
+		}
+		return func(name string) error {
+			for _, fn := range fns {
+				if err := fn(name); err != nil {
+					return err
+				}
+			}
+			return nil
+		}
+	}()
+	// permissionDescResource is the schema descriptor for resource field.
+	permissionDescResource := permissionFields[2].Descriptor()
+	// permission.ResourceValidator is a validator for the "resource" field. It is called by the builders before save.
+	permission.ResourceValidator = func() func(string) error {
+		validators := permissionDescResource.Validators
+		fns := [...]func(string) error{
+			validators[0].(func(string) error),
+			validators[1].(func(string) error),
+		}
+		return func(resource string) error {
+			for _, fn := range fns {
+				if err := fn(resource); err != nil {
+					return err
+				}
+			}
+			return nil
+		}
+	}()
+	// permissionDescAction is the schema descriptor for action field.
+	permissionDescAction := permissionFields[3].Descriptor()
+	// permission.ActionValidator is a validator for the "action" field. It is called by the builders before save.
+	permission.ActionValidator = func() func(string) error {
+		validators := permissionDescAction.Validators
+		fns := [...]func(string) error{
+			validators[0].(func(string) error),
+			validators[1].(func(string) error),
+		}
+		return func(action string) error {
+			for _, fn := range fns {
+				if err := fn(action); err != nil {
+					return err
+				}
+			}
+			return nil
+		}
+	}()
 	promocodeFields := schema.PromoCode{}.Fields()
 	_ = promocodeFields
 	// promocodeDescCode is the schema descriptor for code field.
@@ -1787,6 +1880,65 @@ func init() {
 	redeemcodeDescValidityDays := redeemcodeFields[10].Descriptor()
 	// redeemcode.DefaultValidityDays holds the default value on creation for the validity_days field.
 	redeemcode.DefaultValidityDays = redeemcodeDescValidityDays.Default.(int)
+	roleMixin := schema.Role{}.Mixin()
+	roleMixinFields0 := roleMixin[0].Fields()
+	_ = roleMixinFields0
+	roleFields := schema.Role{}.Fields()
+	_ = roleFields
+	// roleDescCreatedAt is the schema descriptor for created_at field.
+	roleDescCreatedAt := roleMixinFields0[0].Descriptor()
+	// role.DefaultCreatedAt holds the default value on creation for the created_at field.
+	role.DefaultCreatedAt = roleDescCreatedAt.Default.(func() time.Time)
+	// roleDescUpdatedAt is the schema descriptor for updated_at field.
+	roleDescUpdatedAt := roleMixinFields0[1].Descriptor()
+	// role.DefaultUpdatedAt holds the default value on creation for the updated_at field.
+	role.DefaultUpdatedAt = roleDescUpdatedAt.Default.(func() time.Time)
+	// role.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
+	role.UpdateDefaultUpdatedAt = roleDescUpdatedAt.UpdateDefault.(func() time.Time)
+	// roleDescCode is the schema descriptor for code field.
+	roleDescCode := roleFields[0].Descriptor()
+	// role.CodeValidator is a validator for the "code" field. It is called by the builders before save.
+	role.CodeValidator = func() func(string) error {
+		validators := roleDescCode.Validators
+		fns := [...]func(string) error{
+			validators[0].(func(string) error),
+			validators[1].(func(string) error),
+		}
+		return func(code string) error {
+			for _, fn := range fns {
+				if err := fn(code); err != nil {
+					return err
+				}
+			}
+			return nil
+		}
+	}()
+	// roleDescName is the schema descriptor for name field.
+	roleDescName := roleFields[1].Descriptor()
+	// role.NameValidator is a validator for the "name" field. It is called by the builders before save.
+	role.NameValidator = func() func(string) error {
+		validators := roleDescName.Validators
+		fns := [...]func(string) error{
+			validators[0].(func(string) error),
+			validators[1].(func(string) error),
+		}
+		return func(name string) error {
+			for _, fn := range fns {
+				if err := fn(name); err != nil {
+					return err
+				}
+			}
+			return nil
+		}
+	}()
+	// roleDescIsSystem is the schema descriptor for is_system field.
+	roleDescIsSystem := roleFields[3].Descriptor()
+	// role.DefaultIsSystem holds the default value on creation for the is_system field.
+	role.DefaultIsSystem = roleDescIsSystem.Default.(bool)
+	// roleDescIsSuperAdmin is the schema descriptor for is_super_admin field.
+	roleDescIsSuperAdmin := roleFields[4].Descriptor()
+	// role.DefaultIsSuperAdmin holds the default value on creation for the is_super_admin field.
+	role.DefaultIsSuperAdmin = roleDescIsSuperAdmin.Default.(bool)
 	securitysecretMixin := schema.SecuritySecret{}.Mixin()
 	securitysecretMixinFields0 := securitysecretMixin[0].Fields()
 	_ = securitysecretMixinFields0

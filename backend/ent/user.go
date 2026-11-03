@@ -101,11 +101,15 @@ type UserEdges struct {
 	PendingAuthSessions []*PendingAuthSession `json:"pending_auth_sessions,omitempty"`
 	// PlatformQuotas holds the value of the platform_quotas edge.
 	PlatformQuotas []*UserPlatformQuota `json:"platform_quotas,omitempty"`
+	// Roles holds the value of the roles edge.
+	Roles []*Role `json:"roles,omitempty"`
 	// UserAllowedGroups holds the value of the user_allowed_groups edge.
 	UserAllowedGroups []*UserAllowedGroup `json:"user_allowed_groups,omitempty"`
+	// UserRoles holds the value of the user_roles edge.
+	UserRoles []*UserRole `json:"user_roles,omitempty"`
 	// loadedTypes holds the information for reporting if a
 	// type was loaded (or requested) in eager-loading or not.
-	loadedTypes [14]bool
+	loadedTypes [16]bool
 }
 
 // APIKeysOrErr returns the APIKeys value or an error if the edge
@@ -225,13 +229,31 @@ func (e UserEdges) PlatformQuotasOrErr() ([]*UserPlatformQuota, error) {
 	return nil, &NotLoadedError{edge: "platform_quotas"}
 }
 
+// RolesOrErr returns the Roles value or an error if the edge
+// was not loaded in eager-loading.
+func (e UserEdges) RolesOrErr() ([]*Role, error) {
+	if e.loadedTypes[13] {
+		return e.Roles, nil
+	}
+	return nil, &NotLoadedError{edge: "roles"}
+}
+
 // UserAllowedGroupsOrErr returns the UserAllowedGroups value or an error if the edge
 // was not loaded in eager-loading.
 func (e UserEdges) UserAllowedGroupsOrErr() ([]*UserAllowedGroup, error) {
-	if e.loadedTypes[13] {
+	if e.loadedTypes[14] {
 		return e.UserAllowedGroups, nil
 	}
 	return nil, &NotLoadedError{edge: "user_allowed_groups"}
+}
+
+// UserRolesOrErr returns the UserRoles value or an error if the edge
+// was not loaded in eager-loading.
+func (e UserEdges) UserRolesOrErr() ([]*UserRole, error) {
+	if e.loadedTypes[15] {
+		return e.UserRoles, nil
+	}
+	return nil, &NotLoadedError{edge: "user_roles"}
 }
 
 // scanValues returns the types for scanning values from sql.Rows.
@@ -504,9 +526,19 @@ func (_m *User) QueryPlatformQuotas() *UserPlatformQuotaQuery {
 	return NewUserClient(_m.config).QueryPlatformQuotas(_m)
 }
 
+// QueryRoles queries the "roles" edge of the User entity.
+func (_m *User) QueryRoles() *RoleQuery {
+	return NewUserClient(_m.config).QueryRoles(_m)
+}
+
 // QueryUserAllowedGroups queries the "user_allowed_groups" edge of the User entity.
 func (_m *User) QueryUserAllowedGroups() *UserAllowedGroupQuery {
 	return NewUserClient(_m.config).QueryUserAllowedGroups(_m)
+}
+
+// QueryUserRoles queries the "user_roles" edge of the User entity.
+func (_m *User) QueryUserRoles() *UserRoleQuery {
+	return NewUserClient(_m.config).QueryUserRoles(_m)
 }
 
 // Update returns a builder for updating this User.

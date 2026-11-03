@@ -963,6 +963,7 @@ var (
 		{Name: "default_mapped_model", Type: field.TypeString, Size: 100, Default: ""},
 		{Name: "messages_dispatch_model_config", Type: field.TypeJSON, SchemaType: map[string]string{"postgres": "jsonb"}},
 		{Name: "model_allowlist", Type: field.TypeJSON, SchemaType: map[string]string{"postgres": "jsonb"}},
+		{Name: "response_result_cache_config", Type: field.TypeJSON, SchemaType: map[string]string{"postgres": "jsonb"}},
 		{Name: "codex_models_manifest_config", Type: field.TypeJSON, SchemaType: map[string]string{"postgres": "jsonb"}},
 		{Name: "rpm_limit", Type: field.TypeInt, Default: 0},
 		{Name: "max_reasoning_effort", Type: field.TypeString, Size: 20, Default: ""},
@@ -1324,6 +1325,23 @@ var (
 			},
 		},
 	}
+	// PermissionsColumns holds the columns for the "permissions" table.
+	PermissionsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeInt64, Increment: true},
+		{Name: "created_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
+		{Name: "updated_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
+		{Name: "code", Type: field.TypeString, Unique: true, Size: 150},
+		{Name: "name", Type: field.TypeString, Size: 150},
+		{Name: "resource", Type: field.TypeString, Size: 100},
+		{Name: "action", Type: field.TypeString, Size: 100},
+		{Name: "description", Type: field.TypeString, Nullable: true},
+	}
+	// PermissionsTable holds the schema information for the "permissions" table.
+	PermissionsTable = &schema.Table{
+		Name:       "permissions",
+		Columns:    PermissionsColumns,
+		PrimaryKey: []*schema.Column{PermissionsColumns[0]},
+	}
 	// PromoCodesColumns holds the columns for the "promo_codes" table.
 	PromoCodesColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeInt64, Increment: true},
@@ -1508,6 +1526,73 @@ var (
 				Name:    "redeemcode_expires_at",
 				Unique:  false,
 				Columns: []*schema.Column{RedeemCodesColumns[8]},
+			},
+		},
+	}
+	// RolesColumns holds the columns for the "roles" table.
+	RolesColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeInt64, Increment: true},
+		{Name: "created_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
+		{Name: "updated_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
+		{Name: "code", Type: field.TypeString, Unique: true, Size: 100},
+		{Name: "name", Type: field.TypeString, Size: 150},
+		{Name: "description", Type: field.TypeString, Nullable: true},
+		{Name: "is_system", Type: field.TypeBool, Default: false},
+		{Name: "is_super_admin", Type: field.TypeBool, Default: false},
+	}
+	// RolesTable holds the schema information for the "roles" table.
+	RolesTable = &schema.Table{
+		Name:       "roles",
+		Columns:    RolesColumns,
+		PrimaryKey: []*schema.Column{RolesColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "role_is_system",
+				Unique:  false,
+				Columns: []*schema.Column{RolesColumns[6]},
+			},
+			{
+				Name:    "role_is_super_admin",
+				Unique:  false,
+				Columns: []*schema.Column{RolesColumns[7]},
+			},
+		},
+	}
+	// RolePermissionsColumns holds the columns for the "role_permissions" table.
+	RolePermissionsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeInt64, Increment: true},
+		{Name: "role_id", Type: field.TypeInt64},
+		{Name: "permission_id", Type: field.TypeInt64},
+	}
+	// RolePermissionsTable holds the schema information for the "role_permissions" table.
+	RolePermissionsTable = &schema.Table{
+		Name:       "role_permissions",
+		Columns:    RolePermissionsColumns,
+		PrimaryKey: []*schema.Column{RolePermissionsColumns[0]},
+		ForeignKeys: []*schema.ForeignKey{
+			{
+				Symbol:     "role_permissions_roles_role",
+				Columns:    []*schema.Column{RolePermissionsColumns[1]},
+				RefColumns: []*schema.Column{RolesColumns[0]},
+				OnDelete:   schema.NoAction,
+			},
+			{
+				Symbol:     "role_permissions_permissions_permission",
+				Columns:    []*schema.Column{RolePermissionsColumns[2]},
+				RefColumns: []*schema.Column{PermissionsColumns[0]},
+				OnDelete:   schema.NoAction,
+			},
+		},
+		Indexes: []*schema.Index{
+			{
+				Name:    "rolepermission_role_id_permission_id",
+				Unique:  true,
+				Columns: []*schema.Column{RolePermissionsColumns[1], RolePermissionsColumns[2]},
+			},
+			{
+				Name:    "rolepermission_permission_id",
+				Unique:  false,
+				Columns: []*schema.Column{RolePermissionsColumns[2]},
 			},
 		},
 	}
@@ -2000,6 +2085,44 @@ var (
 			},
 		},
 	}
+	// UserRolesColumns holds the columns for the "user_roles" table.
+	UserRolesColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeInt64, Increment: true},
+		{Name: "user_id", Type: field.TypeInt64},
+		{Name: "role_id", Type: field.TypeInt64},
+	}
+	// UserRolesTable holds the schema information for the "user_roles" table.
+	UserRolesTable = &schema.Table{
+		Name:       "user_roles",
+		Columns:    UserRolesColumns,
+		PrimaryKey: []*schema.Column{UserRolesColumns[0]},
+		ForeignKeys: []*schema.ForeignKey{
+			{
+				Symbol:     "user_roles_users_user",
+				Columns:    []*schema.Column{UserRolesColumns[1]},
+				RefColumns: []*schema.Column{UsersColumns[0]},
+				OnDelete:   schema.NoAction,
+			},
+			{
+				Symbol:     "user_roles_roles_role",
+				Columns:    []*schema.Column{UserRolesColumns[2]},
+				RefColumns: []*schema.Column{RolesColumns[0]},
+				OnDelete:   schema.NoAction,
+			},
+		},
+		Indexes: []*schema.Index{
+			{
+				Name:    "userrole_user_id_role_id",
+				Unique:  true,
+				Columns: []*schema.Column{UserRolesColumns[1], UserRolesColumns[2]},
+			},
+			{
+				Name:    "userrole_role_id",
+				Unique:  false,
+				Columns: []*schema.Column{UserRolesColumns[2]},
+			},
+		},
+	}
 	// UserSubscriptionsColumns holds the columns for the "user_subscriptions" table.
 	UserSubscriptionsColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeInt64, Increment: true},
@@ -2114,10 +2237,13 @@ var (
 		PaymentOrdersTable,
 		PaymentProviderInstancesTable,
 		PendingAuthSessionsTable,
+		PermissionsTable,
 		PromoCodesTable,
 		PromoCodeUsagesTable,
 		ProxiesTable,
 		RedeemCodesTable,
+		RolesTable,
+		RolePermissionsTable,
 		SecuritySecretsTable,
 		SettingsTable,
 		SubscriptionPlansTable,
@@ -2129,6 +2255,7 @@ var (
 		UserAttributeDefinitionsTable,
 		UserAttributeValuesTable,
 		UserPlatformQuotasTable,
+		UserRolesTable,
 		UserSubscriptionsTable,
 	}
 )
@@ -2221,6 +2348,9 @@ func init() {
 	PendingAuthSessionsTable.Annotation = &entsql.Annotation{
 		Table: "pending_auth_sessions",
 	}
+	PermissionsTable.Annotation = &entsql.Annotation{
+		Table: "permissions",
+	}
 	PromoCodesTable.Annotation = &entsql.Annotation{
 		Table: "promo_codes",
 	}
@@ -2237,6 +2367,14 @@ func init() {
 	RedeemCodesTable.ForeignKeys[1].RefTable = UsersTable
 	RedeemCodesTable.Annotation = &entsql.Annotation{
 		Table: "redeem_codes",
+	}
+	RolesTable.Annotation = &entsql.Annotation{
+		Table: "roles",
+	}
+	RolePermissionsTable.ForeignKeys[0].RefTable = RolesTable
+	RolePermissionsTable.ForeignKeys[1].RefTable = PermissionsTable
+	RolePermissionsTable.Annotation = &entsql.Annotation{
+		Table: "role_permissions",
 	}
 	SecuritySecretsTable.Annotation = &entsql.Annotation{
 		Table: "security_secrets",
@@ -2280,6 +2418,11 @@ func init() {
 	UserPlatformQuotasTable.ForeignKeys[0].RefTable = UsersTable
 	UserPlatformQuotasTable.Annotation = &entsql.Annotation{
 		Table: "user_platform_quotas",
+	}
+	UserRolesTable.ForeignKeys[0].RefTable = UsersTable
+	UserRolesTable.ForeignKeys[1].RefTable = RolesTable
+	UserRolesTable.Annotation = &entsql.Annotation{
+		Table: "user_roles",
 	}
 	UserSubscriptionsTable.ForeignKeys[0].RefTable = GroupsTable
 	UserSubscriptionsTable.ForeignKeys[1].RefTable = UsersTable

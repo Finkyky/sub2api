@@ -7,6 +7,7 @@ import (
 	"database/sql"
 	"fmt"
 	"log"
+	"net/url"
 	"os"
 	"os/exec"
 	"strconv"
@@ -23,7 +24,7 @@ import (
 
 	"entgo.io/ent/dialect"
 	entsql "entgo.io/ent/dialect/sql"
-	_ "github.com/lib/pq"
+	"github.com/lib/pq"
 	redisclient "github.com/redis/go-redis/v9"
 	tcpostgres "github.com/testcontainers/testcontainers-go/modules/postgres"
 	tcredis "github.com/testcontainers/testcontainers-go/modules/redis"
@@ -35,6 +36,7 @@ const (
 )
 
 var (
+	integrationDSN       string
 	integrationDB        *sql.DB
 	integrationEntClient *dbent.Client
 	integrationRedis     *redisclient.Client
@@ -42,22 +44,22 @@ var (
 	redisNamespaceSeq uint64
 )
 
-func TestMain(m *testing.M) {
+func TestMain(m *testing.M) { os.Exit(runIntegrationTests(m)) }
+
+func runIntegrationTests(m *testing.M) int {
 	ctx := context.Background()
 
 	if err := timezone.Init("UTC"); err != nil {
 		log.Printf("failed to init timezone: %v", err)
-		os.Exit(1)
+		return 1
 	}
 
+	if dsn := strings.TrimSpace(os.Getenv("SUB2API_TEST_POSTGRES_DSN")); dsn != "" {
+		return runExternalPostgresTests(ctx, m, dsn)
+	}
 	if !dockerIsAvailable(ctx) {
-		// In CI we expect Docker to be available so integration tests should fail loudly.
-		if os.Getenv("CI") != "" {
-			log.Printf("docker is not available (CI=true); failing integration tests")
-			os.Exit(1)
-		}
-		log.Printf("docker is not available; skipping integration tests (start Docker to enable)")
-		os.Exit(0)
+		log.Printf("integration tests require Docker or SUB2API_TEST_POSTGRES_DSN (PostgreSQL URL with CREATEDB); no tests ran")
+		return 1
 	}
 
 	postgresImage := selectDockerImage(ctx, postgresImageTag)
@@ -71,7 +73,7 @@ func TestMain(m *testing.M) {
 	)
 	if err != nil {
 		log.Printf("failed to start postgres container: %v", err)
-		os.Exit(1)
+		return 1
 	}
 	defer func() { _ = pgContainer.Terminate(ctx) }()
 
@@ -81,24 +83,25 @@ func TestMain(m *testing.M) {
 	)
 	if err != nil {
 		log.Printf("failed to start redis container: %v", err)
-		os.Exit(1)
+		return 1
 	}
 	defer func() { _ = redisContainer.Terminate(ctx) }()
 
 	dsn, err := pgContainer.ConnectionString(ctx, "sslmode=disable", "TimeZone=UTC")
 	if err != nil {
 		log.Printf("failed to get postgres dsn: %v", err)
-		os.Exit(1)
+		return 1
 	}
 
+	integrationDSN = dsn
 	integrationDB, err = openSQLWithRetry(ctx, dsn, 30*time.Second)
 	if err != nil {
 		log.Printf("failed to open sql db: %v", err)
-		os.Exit(1)
+		return 1
 	}
 	if err := ApplyMigrations(ctx, integrationDB); err != nil {
 		log.Printf("failed to apply db migrations: %v", err)
-		os.Exit(1)
+		return 1
 	}
 
 	// 创建 ent client 用于集成测试
@@ -108,12 +111,12 @@ func TestMain(m *testing.M) {
 	redisHost, err := redisContainer.Host(ctx)
 	if err != nil {
 		log.Printf("failed to get redis host: %v", err)
-		os.Exit(1)
+		return 1
 	}
 	redisPort, err := redisContainer.MappedPort(ctx, "6379/tcp")
 	if err != nil {
 		log.Printf("failed to get redis port: %v", err)
-		os.Exit(1)
+		return 1
 	}
 
 	integrationRedis = redisclient.NewClient(&redisclient.Options{
@@ -122,7 +125,7 @@ func TestMain(m *testing.M) {
 	})
 	if err := integrationRedis.Ping(ctx).Err(); err != nil {
 		log.Printf("failed to ping redis: %v", err)
-		os.Exit(1)
+		return 1
 	}
 
 	code := m.Run()
@@ -131,7 +134,83 @@ func TestMain(m *testing.M) {
 	_ = integrationRedis.Close()
 	_ = integrationDB.Close()
 
-	os.Exit(code)
+	return code
+}
+
+// External mode creates a fresh database and never migrates the database in the
+// supplied URL. The login needs CREATEDB; no production DSN is auto-discovered.
+// Redis is optional for SQL-only selections, but Redis tests fail (not skip)
+// unless SUB2API_TEST_REDIS_ADDR explicitly names a disposable test instance.
+func runExternalPostgresTests(ctx context.Context, m *testing.M, dsn string) (code int) {
+	u, err := url.Parse(dsn)
+	if err != nil || (u.Scheme != "postgres" && u.Scheme != "postgresql") || u.Host == "" {
+		log.Print("SUB2API_TEST_POSTGRES_DSN must be a postgres:// or postgresql:// URL")
+		return 1
+	}
+	admin, err := openSQLWithRetry(ctx, dsn, 10*time.Second)
+	if err != nil {
+		log.Print("failed to connect to external PostgreSQL")
+		return 1
+	}
+	defer admin.Close()
+	name := fmt.Sprintf("sub2api_it_%d", time.Now().UnixNano())
+	if _, err := admin.ExecContext(ctx, "CREATE DATABASE "+pq.QuoteIdentifier(name)); err != nil {
+		log.Printf("create isolated integration database (CREATEDB required): %v", err)
+		return 1
+	}
+	defer func() {
+		cleanup, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+		defer cancel()
+		if _, err := admin.ExecContext(cleanup, "DROP DATABASE "+pq.QuoteIdentifier(name)+" WITH (FORCE)"); err != nil {
+			log.Printf("cleanup isolated integration database %s: %v", name, err)
+			code = 1
+		}
+	}()
+	u.Path = "/" + name
+	u.RawPath = ""
+	query := u.Query()
+	query.Del("dbname")
+	query.Del("search_path")
+	query.Del("options")
+	query.Set("TimeZone", "UTC")
+	u.RawQuery = query.Encode()
+	integrationDSN = u.String()
+	integrationDB, err = openSQLWithRetry(ctx, integrationDSN, 15*time.Second)
+	if err != nil {
+		log.Print("failed to open isolated integration database")
+		return 1
+	}
+	defer integrationDB.Close()
+	var connectedDatabase string
+	if err := integrationDB.QueryRowContext(ctx, "SELECT current_database()").Scan(&connectedDatabase); err != nil || connectedDatabase != name {
+		log.Print("external integration database isolation verification failed")
+		return 1
+	}
+	log.Printf("external PostgreSQL: isolated database %s", name)
+	if err := ApplyMigrations(ctx, integrationDB); err != nil {
+		log.Printf("failed to apply migrations: %v", err)
+		return 1
+	}
+	integrationEntClient = dbent.NewClient(dbent.Driver(entsql.OpenDB(dialect.Postgres, integrationDB)))
+	defer integrationEntClient.Close()
+	if addr := strings.TrimSpace(os.Getenv("SUB2API_TEST_REDIS_ADDR")); addr != "" {
+		integrationRedis = redisclient.NewClient(&redisclient.Options{Addr: addr})
+		defer integrationRedis.Close()
+		if err := integrationRedis.Ping(ctx).Err(); err != nil {
+			log.Printf("external Redis ping: %v", err)
+			return 1
+		}
+	}
+	return m.Run()
+}
+
+// IntegrationTestDatabase shares only the disposable harness database with
+// repository_test HTTP tests, avoiding a repository -> middleware import cycle.
+func IntegrationTestDatabase(t *testing.T) (*sql.DB, *dbent.Client) {
+	t.Helper()
+	require.NotNil(t, integrationDB)
+	require.NotNil(t, integrationEntClient)
+	return integrationDB, integrationEntClient
 }
 
 func dockerIsAvailable(ctx context.Context) bool {
@@ -247,6 +326,7 @@ func testEntSQLTx(t *testing.T) (*dbent.Client, *sql.Tx) {
 
 func testRedis(t *testing.T) *redisclient.Client {
 	t.Helper()
+	require.NotNil(t, integrationRedis, "Redis tests require Docker or SUB2API_TEST_REDIS_ADDR")
 
 	prefix := fmt.Sprintf(
 		"it:%s:%d:%d:",

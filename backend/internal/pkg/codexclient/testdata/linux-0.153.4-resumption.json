@@ -1,0 +1,160 @@
+{
+  "codex_version": "codex-cli 0.153.4",
+  "binary_sha256": "56ef98ab4032d317ab26e9b5e5a175650717351edb16ed9cde0cb6d1734d62da",
+  "tls_backend": "rustls",
+  "scenario": "HTTP/1.1 reconnect after local HTTP 503",
+  "connections": [
+    {
+      "tls_client_hello": {
+        "legacy_version": 771,
+        "record_version": 769,
+        "session_id_size": 32,
+        "cipher_suites": [
+          4866,
+          4865,
+          4867,
+          49196,
+          49195,
+          52393,
+          49200,
+          49199,
+          52392,
+          255
+        ],
+        "extensions": [
+          13,
+          5,
+          0,
+          45,
+          51,
+          11,
+          43,
+          16,
+          23,
+          35,
+          10
+        ],
+        "signature_algorithms": [
+          1283,
+          1027,
+          1539,
+          2055,
+          2054,
+          2053,
+          2052,
+          1537,
+          1281,
+          1025
+        ],
+        "psk_modes": [
+          1
+        ],
+        "key_shares": [
+          {
+            "group": 4588,
+            "size": 1216
+          },
+          {
+            "group": 29,
+            "size": 32
+          }
+        ],
+        "point_formats": [
+          0
+        ],
+        "supported_versions": [
+          772,
+          771
+        ],
+        "alpn": [
+          "h2",
+          "http/1.1"
+        ],
+        "supported_groups": [
+          4588,
+          29,
+          23,
+          24
+        ]
+      },
+      "session_reused": false,
+      "negotiated_alpn": "http/1.1"
+    },
+    {
+      "tls_client_hello": {
+        "legacy_version": 771,
+        "record_version": 769,
+        "session_id_size": 32,
+        "cipher_suites": [
+          4866,
+          4865,
+          4867,
+          49196,
+          49195,
+          52393,
+          49200,
+          49199,
+          52392,
+          255
+        ],
+        "extensions": [
+          43,
+          10,
+          0,
+          11,
+          23,
+          51,
+          13,
+          45,
+          16,
+          5,
+          41
+        ],
+        "supported_versions": [
+          772,
+          771
+        ],
+        "supported_groups": [
+          4588,
+          29,
+          23,
+          24
+        ],
+        "point_formats": [
+          0
+        ],
+        "key_shares": [
+          {
+            "group": 4588,
+            "size": 1216
+          },
+          {
+            "group": 29,
+            "size": 32
+          }
+        ],
+        "signature_algorithms": [
+          1283,
+          1027,
+          1539,
+          2055,
+          2054,
+          2053,
+          2052,
+          1537,
+          1281,
+          1025
+        ],
+        "psk_modes": [
+          1
+        ],
+        "alpn": [
+          "h2",
+          "http/1.1"
+        ]
+      },
+      "session_reused": true,
+      "negotiated_alpn": "http/1.1"
+    }
+  ]
+}

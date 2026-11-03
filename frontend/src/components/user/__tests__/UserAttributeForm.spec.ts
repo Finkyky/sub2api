@@ -2,6 +2,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils'
 import UserAttributeForm from '../UserAttributeForm.vue'
 
+vi.mock('vue-i18n', () => ({ useI18n: () => ({ t: (key: string) => key }) }))
+vi.mock('@/stores/auth', () => ({ useAuthStore: () => ({ hasPermission: () => true }) }))
+
 const mocks = vi.hoisted(() => ({ listEnabledDefinitions: vi.fn() }))
 vi.mock('@/api/admin', () => ({ adminAPI: { userAttributes: mocks } }))
 enableAutoUnmount(afterEach)

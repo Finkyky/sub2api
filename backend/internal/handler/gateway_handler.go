@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"bytes"
 	"context"
 	"crypto/rand"
 	"encoding/json"
@@ -51,6 +52,7 @@ type GatewayHandler struct {
 	usageRecordWorkerPool     *service.UsageRecordWorkerPool
 	errorPassthroughService   *service.ErrorPassthroughService
 	contentModerationService  *service.ContentModerationService
+	resultCacheService        *service.ResultCacheService
 	securityAuditCoordinator  *securityaudit.Coordinator
 	// geminiCachedContentService 管理 Gemini 显式缓存；为 nil 时相关接口不可用。
 	geminiCachedContentService *service.GeminiCachedContentService
@@ -202,6 +204,19 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 	// 检查是否为 Claude Code 客户端，设置到 context 中（复用已解析请求，避免二次反序列化）。
 	SetClaudeCodeClientContext(c, body, parsedReq)
 	isClaudeCodeClient := service.IsClaudeCodeClient(c.Request.Context())
+	pluginBody, pluginAuditKey, pluginErr := recheckPluginGatewayClaudeGroup(c, apiKey, body)
+	if pluginErr != nil {
+		status, code := pluginGatewayErrorStatus(pluginErr)
+		pluginGatewayError(c, service.PluginProtocolAnthropicMessages, status, code)
+		return
+	}
+	if !bytes.Equal(pluginBody, body) {
+		if err := parsedReq.ReplaceBody(pluginBody); err != nil {
+			pluginGatewayError(c, service.PluginProtocolAnthropicMessages, 400, "plugin_input_invalid")
+			return
+		}
+		body = parsedReq.Body.Bytes()
+	}
 
 	// 版本检查：仅对 Claude Code 客户端，拒绝低于最低版本的请求
 	if !h.checkClaudeCodeVersion(c) {
@@ -233,7 +248,7 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 		return
 	}
 
-	if decision := h.checkSecurityAudit(c, reqLog, apiKey, subject, service.ContentModerationProtocolAnthropicMessages, reqModel, body); decision != nil && !decision.AllowNextStage {
+	if decision := h.checkSecurityAudit(c, reqLog, pluginAuditKey, subject, service.ContentModerationProtocolAnthropicMessages, reqModel, body); decision != nil && !decision.AllowNextStage {
 		h.anthropicSecurityAuditError(c, decision)
 		return
 	}
@@ -1037,6 +1052,26 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 							return
 						}
 						// 兜底重试按"直接请求兜底分组"处理：清除强制平台，允许按分组平台调度
+						pluginBody, pluginErr := recheckPluginGatewayFallback(c, fallbackGroup.ID, body)
+						if pluginErr != nil {
+							status, code := pluginGatewayErrorStatus(pluginErr)
+							pluginGatewayError(c, service.PluginProtocolAnthropicMessages, status, code)
+							return
+						}
+						// The fallback group may have a different policy even when text is
+						// unchanged. Completion reuse is bound to group and body identity.
+						if decision := h.checkSecurityAudit(c, reqLog, fallbackAPIKey, subject, service.ContentModerationProtocolAnthropicMessages, reqModel, pluginBody); decision != nil && !decision.AllowNextStage {
+							markPluginGatewayFailure(c, decision.HTTPStatus, "security_audit_blocked")
+							h.anthropicSecurityAuditError(c, decision)
+							return
+						}
+						if !bytes.Equal(pluginBody, body) {
+							if err := parsedReq.ReplaceBody(pluginBody); err != nil {
+								pluginGatewayError(c, service.PluginProtocolAnthropicMessages, http.StatusBadRequest, "plugin_input_invalid")
+								return
+							}
+							body = parsedReq.Body.Bytes()
+						}
 						ctx := context.WithValue(c.Request.Context(), ctxkey.ForcePlatform, "")
 						c.Request = c.Request.WithContext(ctx)
 						currentAPIKey = fallbackAPIKey

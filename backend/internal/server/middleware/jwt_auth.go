@@ -16,8 +16,9 @@ func NewJWTAuthMiddleware(
 	userService *service.UserService,
 	settingService *service.SettingService,
 	auditService *service.AuditLogService,
+	rbacService *service.RBACService,
 ) JWTAuthMiddleware {
-	return JWTAuthMiddleware(jwtAuth(authService, userService, userService, settingService, auditService))
+	return JWTAuthMiddleware(jwtAuthWithRBAC(authService, userService, userService, settingService, auditService, rbacService))
 }
 
 type jwtUserReader interface {
@@ -35,6 +36,19 @@ func jwtAuth(
 	activityToucher userActivityToucher,
 	settingService *service.SettingService,
 	auditService *service.AuditLogService,
+) gin.HandlerFunc {
+	return jwtAuthWithRBAC(authService, userService, activityToucher, settingService, auditService, nil)
+}
+
+// jwtAuthWithRBAC keeps authorization independent from the persisted legacy role.
+// Optional JWT callers use jwtAuth and intentionally receive no admin grants.
+func jwtAuthWithRBAC(
+	authService *service.AuthService,
+	userService jwtUserReader,
+	activityToucher userActivityToucher,
+	settingService *service.SettingService,
+	auditService *service.AuditLogService,
+	rbacService *service.RBACService,
 ) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		// 从Authorization header中提取token
@@ -96,6 +110,17 @@ func jwtAuth(
 		if !enforceSessionBinding(c, authService, settingService, auditService, claims) {
 			return
 		}
+
+		snapshot := service.RBACSnapshot{}
+		if rbacService != nil {
+			snapshot, err = rbacService.Snapshot(c.Request.Context(), user.ID)
+			if err != nil {
+				AbortWithError(c, 500, "INTERNAL_ERROR", "Failed to load permissions")
+				return
+			}
+		}
+		c.Set(string(ContextKeyAdminAccess), snapshot.HasAdminAccess())
+		c.Set(string(ContextKeySuperAdmin), snapshot.IsSuperAdmin)
 
 		c.Set(string(ContextKeyUser), AuthSubject{
 			UserID:      user.ID,

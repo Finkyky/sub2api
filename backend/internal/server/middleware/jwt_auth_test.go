@@ -62,7 +62,7 @@ func newJWTTestEnv(users map[int64]*service.User) (*gin.Engine, *service.AuthSer
 	userRepo := &stubJWTUserRepo{users: users}
 	authSvc := service.NewAuthService(nil, userRepo, nil, nil, cfg, nil, nil, nil, nil, nil, nil, nil, nil)
 	userSvc := service.NewUserService(userRepo, nil, nil, nil)
-	mw := NewJWTAuthMiddleware(authSvc, userSvc, nil, nil)
+	mw := NewJWTAuthMiddleware(authSvc, userSvc, nil, nil, nil)
 
 	r := gin.New()
 	r.Use(gin.HandlerFunc(mw))
@@ -259,9 +259,9 @@ func TestJWTAuth_UserLookupErrors(t *testing.T) {
 				handler   gin.HandlerFunc
 				websocket bool
 			}{
-				{"user", gin.HandlerFunc(NewJWTAuthMiddleware(authSvc, userSvc, nil, nil)), false},
-				{"admin", gin.HandlerFunc(NewAdminAuthMiddleware(authSvc, userSvc, nil, nil)), false},
-				{"admin websocket", gin.HandlerFunc(NewAdminAuthMiddleware(authSvc, userSvc, nil, nil)), true},
+				{"user", gin.HandlerFunc(NewJWTAuthMiddleware(authSvc, userSvc, nil, nil, nil)), false},
+				{"admin", gin.HandlerFunc(NewAdminAuthMiddleware(authSvc, userSvc, nil, nil, service.NewRBACService(&jwtCompatRBACRepo{}))), false},
+				{"admin websocket", gin.HandlerFunc(NewAdminAuthMiddleware(authSvc, userSvc, nil, nil, service.NewRBACService(&jwtCompatRBACRepo{}))), true},
 			} {
 				t.Run(route.name, func(t *testing.T) {
 					called := false

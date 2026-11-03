@@ -1,5 +1,6 @@
 <template>
   <AppLayout>
+    <TotpStepUpDialog :controller="credentialAccess.stepUp" />
     <TablePageLayout>
       <template #filters>
         <div class="flex flex-wrap items-center gap-3">
@@ -46,7 +47,7 @@
             >
               <Icon name="refresh" size="md" :class="loading ? 'animate-spin' : ''" />
             </button>
-            <button
+            <button v-permission="'proxies.update'"
               @click="handleBatchTest"
               :disabled="batchTesting || loading"
               class="btn btn-secondary"
@@ -55,7 +56,7 @@
               <Icon name="play" size="md" class="mr-2" />
               {{ t('admin.proxies.testConnection') }}
             </button>
-            <button
+            <button v-permission="'proxies.update'"
               @click="handleBatchQualityCheck"
               :disabled="batchQualityChecking || loading"
               class="btn btn-secondary"
@@ -64,7 +65,7 @@
               <Icon name="shield" size="md" class="mr-2" :class="batchQualityChecking ? 'animate-pulse' : ''" />
               {{ t('admin.proxies.batchQualityCheck') }}
             </button>
-            <button
+            <button v-permission="'proxies.delete'"
               @click="openBatchDelete"
               :disabled="selectedCount === 0"
               class="btn btn-danger"
@@ -73,13 +74,13 @@
               <Icon name="trash" size="md" class="mr-2" />
               {{ t('admin.proxies.batchDeleteAction') }}
             </button>
-            <button @click="showImportData = true" class="btn btn-secondary">
+            <button v-permission="'proxies.import'" @click="showImportData = true" class="btn btn-secondary">
               {{ t('admin.proxies.dataImport') }}
             </button>
-            <button @click="showExportDataDialog = true" class="btn btn-secondary">
+            <button v-permission="'proxies.export'" @click="showExportDataDialog = true" class="btn btn-secondary">
               {{ selectedCount > 0 ? t('admin.proxies.dataExportSelected') : t('admin.proxies.dataExport') }}
             </button>
-            <button @click="showCreateModal = true" class="btn btn-primary">
+            <button v-permission="'proxies.create'" @click="showCreateModal = true" class="btn btn-primary">
               <Icon name="plus" size="md" class="mr-2" />
               {{ t('admin.proxies.createProxy') }}
             </button>
@@ -136,12 +137,12 @@
             <div class="flex items-center gap-1.5">
               <code class="code text-xs">{{ row.host }}:{{ row.port }}</code>
               <div class="relative">
-                <button
+                <button v-permission="'proxies.export'"
                   type="button"
                   class="rounded p-0.5 text-gray-400 hover:text-primary-600 dark:hover:text-primary-400"
                   :title="t('admin.proxies.copyProxyUrl')"
                   @click.stop="copyProxyUrl(row)"
-                  @contextmenu.prevent="toggleCopyMenu(row.id)"
+                  @contextmenu.prevent="toggleCopyMenu(row)"
                 >
                   <Icon name="copy" size="sm" />
                 </button>
@@ -150,7 +151,7 @@
                   v-if="copyMenuProxyId === row.id"
                   class="absolute left-0 top-full z-50 mt-1 w-auto min-w-[180px] rounded-lg border border-gray-200 bg-white py-1 shadow-lg dark:border-dark-500 dark:bg-dark-700"
                 >
-                  <button
+                  <button v-permission="'proxies.export'"
                     v-for="fmt in getCopyFormats(row)"
                     :key="fmt.label"
                     class="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs hover:bg-gray-100 dark:hover:bg-dark-600"
@@ -164,18 +165,18 @@
           </template>
 
           <template #cell-auth="{ row }">
-            <div v-if="row.username || row.password" class="flex items-center gap-1.5">
+            <div v-if="row.username || can('proxies.export')" class="flex items-center gap-1.5">
               <div class="flex flex-col text-xs">
                 <span v-if="row.username" class="text-gray-700 dark:text-gray-200">{{ row.username }}</span>
-                <span v-if="row.password" class="font-mono text-gray-500 dark:text-gray-400">
-                  {{ visiblePasswordIds.has(row.id) ? row.password : '••••••' }}
+                <span v-if="can('proxies.export')" class="font-mono text-gray-500 dark:text-gray-400">
+                  {{ visiblePasswordIds.has(row.id) ? credentials[row.id]?.password : '••••••' }}
                 </span>
               </div>
-              <button
-                v-if="row.password"
+              <button v-permission="'proxies.export'"
+                v-if="can('proxies.export')"
                 type="button"
                 class="ml-1 rounded p-0.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
-                @click.stop="visiblePasswordIds.has(row.id) ? visiblePasswordIds.delete(row.id) : visiblePasswordIds.add(row.id)"
+                @click.stop="togglePassword(row)"
               >
                 <Icon :name="visiblePasswordIds.has(row.id) ? 'eyeOff' : 'eye'" size="sm" />
               </button>
@@ -199,7 +200,7 @@
           </template>
 
           <template #cell-account_count="{ row, value }">
-            <button
+            <button v-permission="'accounts.read'"
               v-if="(value || 0) > 0"
               type="button"
               class="inline-flex items-center rounded bg-gray-100 px-2 py-0.5 text-xs font-medium text-primary-700 hover:bg-gray-200 dark:bg-dark-600 dark:text-primary-300 dark:hover:bg-dark-500"
@@ -269,7 +270,7 @@
 
           <template #cell-actions="{ row }">
             <div class="flex items-center gap-1">
-              <button
+              <button v-permission="'proxies.update'"
                 @click="handleTestConnection(row)"
                 :disabled="testingProxyIds.has(row.id)"
                 class="flex flex-col items-center gap-0.5 rounded-lg p-1.5 text-gray-500 transition-colors hover:bg-emerald-50 hover:text-emerald-600 disabled:cursor-not-allowed disabled:opacity-50 dark:hover:bg-emerald-900/20 dark:hover:text-emerald-400"
@@ -297,7 +298,7 @@
                 <Icon v-else name="checkCircle" size="sm" />
                 <span class="text-xs">{{ t('admin.proxies.testConnection') }}</span>
               </button>
-              <button
+              <button v-permission="'proxies.update'"
                 @click="handleQualityCheck(row)"
                 :disabled="qualityCheckingProxyIds.has(row.id)"
                 class="flex flex-col items-center gap-0.5 rounded-lg p-1.5 text-gray-500 transition-colors hover:bg-blue-50 hover:text-blue-600 disabled:cursor-not-allowed disabled:opacity-50 dark:hover:bg-blue-900/20 dark:hover:text-blue-400"
@@ -325,14 +326,14 @@
                 <Icon v-else name="shield" size="sm" />
                 <span class="text-xs">{{ t('admin.proxies.qualityCheck') }}</span>
               </button>
-              <button
+              <button v-permission="'proxies.update'"
                 @click="handleEdit(row)"
                 class="flex flex-col items-center gap-0.5 rounded-lg p-1.5 text-gray-500 transition-colors hover:bg-gray-100 hover:text-primary-600 dark:hover:bg-dark-700 dark:hover:text-primary-400"
               >
                 <Icon name="edit" size="sm" />
                 <span class="text-xs">{{ t('common.edit') }}</span>
               </button>
-              <button
+              <button v-permission="'proxies.delete'"
                 @click="handleDelete(row)"
                 class="flex flex-col items-center gap-0.5 rounded-lg p-1.5 text-gray-500 transition-colors hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-900/20 dark:hover:text-red-400"
               >
@@ -343,7 +344,7 @@
           </template>
 
           <template #empty>
-            <EmptyState
+            <EmptyState v-if="can('proxies.create')"
               :title="t('admin.proxies.noProxiesYet')"
               :description="t('admin.proxies.createFirstProxy')"
               :action-text="t('admin.proxies.createProxy')"
@@ -421,7 +422,7 @@
       </div>
 
       <!-- Standard Add Form -->
-      <form
+      <form v-permission="'proxies.create'"
         v-if="createMode === 'standard'"
         id="create-proxy-form"
         @submit.prevent="handleCreateProxy"
@@ -594,7 +595,7 @@
           <button @click="closeCreateModal" type="button" class="btn btn-secondary">
             {{ t('common.cancel') }}
           </button>
-          <button
+          <button v-permission="'proxies.create'"
             v-if="createMode === 'standard'"
             type="submit"
             form="create-proxy-form"
@@ -623,7 +624,7 @@
             </svg>
             {{ submitting ? t('admin.proxies.creating') : t('common.create') }}
           </button>
-          <button
+          <button v-permission="'proxies.create'"
             v-else
             @click="handleBatchCreate"
             type="button"
@@ -667,7 +668,7 @@
       width="normal"
       @close="closeEditModal"
     >
-      <form
+      <form v-permission="'proxies.update'"
         v-if="editingProxy"
         id="edit-proxy-form"
         @submit.prevent="handleUpdateProxy"
@@ -768,7 +769,7 @@
           <button @click="closeEditModal" type="button" class="btn btn-secondary">
             {{ t('common.cancel') }}
           </button>
-          <button
+          <button v-permission="'proxies.update'"
             v-if="editingProxy"
             type="submit"
             form="edit-proxy-form"
@@ -802,7 +803,7 @@
     </BaseDialog>
 
     <!-- Delete Confirmation Dialog -->
-    <ConfirmDialog
+    <ConfirmDialog v-if="can('proxies.delete')"
       :show="showDeleteDialog"
       :title="t('admin.proxies.deleteProxy')"
       :message="t('admin.proxies.deleteConfirm', { name: deletingProxy?.name })"
@@ -814,7 +815,7 @@
     />
 
     <!-- Batch Delete Confirmation Dialog -->
-    <ConfirmDialog
+    <ConfirmDialog v-if="can('proxies.delete')"
       :show="showBatchDeleteDialog"
       :title="t('admin.proxies.batchDelete')"
       :message="t('admin.proxies.batchDeleteConfirm', { count: selectedCount })"
@@ -824,7 +825,7 @@
       @confirm="confirmBatchDelete"
       @cancel="showBatchDeleteDialog = false"
     />
-    <ConfirmDialog
+    <ConfirmDialog v-if="can('proxies.export')"
       :show="showExportDataDialog"
       :title="t('admin.proxies.dataExport')"
       :message="t('admin.proxies.dataExportConfirmMessage')"
@@ -982,6 +983,10 @@ import Select from '@/components/common/Select.vue'
 import ProxyAdBanner from '@/components/common/ProxyAdBanner.vue'
 import Icon from '@/components/icons/Icon.vue'
 import PlatformTypeBadge from '@/components/common/PlatformTypeBadge.vue'
+import TotpStepUpDialog from '@/components/auth/TotpStepUpDialog.vue'
+import { useProxyCredentials, credentialProxyUrl } from '@/composables/useProxyCredentials'
+import { usePermission } from '@/composables/usePermission'
+import { isStepUpCancelled } from '@/composables/useStepUp'
 import { useClipboard } from '@/composables/useClipboard'
 import { useSwipeSelect } from '@/composables/useSwipeSelect'
 import { useTableSelection } from '@/composables/useTableSelection'
@@ -992,6 +997,9 @@ import { proxyExpiryBadgeClass, proxyExpiryLabelKey } from '@/utils/proxyExpiry'
 const { t } = useI18n()
 const appStore = useAppStore()
 const { copyToClipboard } = useClipboard()
+const { can } = usePermission()
+const credentialAccess = useProxyCredentials(options => adminAPI.proxies.exportData(options))
+const credentials = credentialAccess.credentials
 
 const columns = computed<Column[]>(() => [
   { key: 'select', label: '', sortable: false },
@@ -1920,16 +1928,20 @@ const formatExportTimestamp = () => {
 }
 
 const handleExportData = async () => {
-  if (exportingData.value) return
+  if (!can('proxies.export') || exportingData.value) return
   exportingData.value = true
   try {
-    const dataPayload = await adminAPI.proxies.exportData(
+    const dataPayload = await credentialAccess.stepUp.run(() => {
+      if (!can('proxies.export')) throw new Error('FORBIDDEN')
+      return adminAPI.proxies.exportData(
       selectedCount.value > 0
         ? { ids: Array.from(selectedProxyIds.value) }
         : {
             filters: buildProxyQueryFilters()
           }
     )
+    })
+    if (!can('proxies.export')) return
     const timestamp = formatExportTimestamp()
     const filename = `sub2api-proxy-${timestamp}.json`
     const blob = new Blob([JSON.stringify(dataPayload, null, 2)], { type: 'application/json' })
@@ -2030,43 +2042,35 @@ const closeAccountsModal = () => {
 }
 
 // ── Proxy URL copy ──
-function buildAuthPart(row: any): string {
-  const user = row.username ? encodeURIComponent(row.username) : ''
-  const pass = row.password ? encodeURIComponent(row.password) : ''
-  if (user && pass) return `${user}:${pass}@`
-  if (user) return `${user}@`
-  if (pass) return `:${pass}@`
-  return ''
-}
-
-function buildProxyUrl(row: any): string {
-  return `${row.protocol}://${buildAuthPart(row)}${row.host}:${row.port}`
-}
-
-function getCopyFormats(row: any) {
-  const hasAuth = row.username || row.password
-  const fullUrl = buildProxyUrl(row)
-  const formats = [
+function getCopyFormats(row: Proxy) {
+  const entry = credentials.value[row.id]
+  if (!entry || !can('proxies.export')) return []
+  const fullUrl = credentialProxyUrl(entry)
+  return [
     { label: fullUrl, value: fullUrl },
+    { label: fullUrl.replace(/^[^:]+:\/\//, ''), value: fullUrl.replace(/^[^:]+:\/\//, '') },
+    { label: `${entry.host}:${entry.port}`, value: `${entry.host}:${entry.port}` }
   ]
-  if (hasAuth) {
-    const withoutProtocol = fullUrl.replace(/^[^:]+:\/\//, '')
-    formats.push({ label: withoutProtocol, value: withoutProtocol })
-  }
-  formats.push({ label: `${row.host}:${row.port}`, value: `${row.host}:${row.port}` })
-  return formats
 }
-
-function copyProxyUrl(row: any) {
-  copyToClipboard(buildProxyUrl(row), t('admin.proxies.urlCopied'))
-  copyMenuProxyId.value = null
+async function copyProxyUrl(row: Proxy) {
+  try {
+    const entry = await credentialAccess.reveal(row)
+    if (can('proxies.export')) await copyToClipboard(credentialProxyUrl(entry), t('admin.proxies.urlCopied'))
+    copyMenuProxyId.value = null
+  } catch (error) { if (!isStepUpCancelled(error)) appStore.showError(t('admin.proxies.dataExportFailed')) }
 }
-
-function toggleCopyMenu(id: number) {
-  copyMenuProxyId.value = copyMenuProxyId.value === id ? null : id
+async function toggleCopyMenu(row: Proxy) {
+  if (copyMenuProxyId.value === row.id) { copyMenuProxyId.value = null; return }
+  try { await credentialAccess.reveal(row); copyMenuProxyId.value = row.id }
+  catch (error) { if (!isStepUpCancelled(error)) appStore.showError(t('admin.proxies.dataExportFailed')) }
 }
-
+async function togglePassword(row: Proxy) {
+  if (visiblePasswordIds.has(row.id)) { visiblePasswordIds.delete(row.id); return }
+  try { await credentialAccess.reveal(row); visiblePasswordIds.add(row.id) }
+  catch (error) { if (!isStepUpCancelled(error)) appStore.showError(t('admin.proxies.dataExportFailed')) }
+}
 function copyFormat(value: string) {
+  if (!can('proxies.export')) return
   copyToClipboard(value, t('admin.proxies.urlCopied'))
   copyMenuProxyId.value = null
 }

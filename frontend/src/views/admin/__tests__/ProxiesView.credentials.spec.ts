@@ -1,3 +1,4 @@
+import '@/permissions/__tests__/authorizedFixture'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises, shallowMount } from '@vue/test-utils'
 import ProxiesView from '../ProxiesView.vue'

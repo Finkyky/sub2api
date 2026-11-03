@@ -8,7 +8,7 @@ import (
 )
 
 func TestNormalizeOpenAIPassthroughOAuthBody_RemovesUnsupportedUser(t *testing.T) {
-	body := []byte(`{"model":"gpt-5.4","input":"hello","user":"user_123","metadata":{"user_id":"user_123"},"prompt_cache_retention":"24h","safety_identifier":"sid","stream_options":{"include_usage":true}}`)
+	body := []byte(`{"model":"gpt-5.4","input":"hello","user":"user_123","metadata":{"user_id":"user_123"},"prompt_cache_retention":"24h","safety_identifier":"sid","stream_options":{"include_usage":true,"reasoning_summary_delivery":"sequential_cutoff"}}`)
 
 	normalized, changed, err := normalizeOpenAIPassthroughOAuthBody(body, false)
 	require.NoError(t, err)
@@ -16,8 +16,47 @@ func TestNormalizeOpenAIPassthroughOAuthBody_RemovesUnsupportedUser(t *testing.T
 	for _, field := range openAIChatGPTInternalUnsupportedFields {
 		require.False(t, gjson.GetBytes(normalized, field).Exists(), "%s should be stripped", field)
 	}
+	require.Equal(t, "sequential_cutoff", gjson.GetBytes(normalized, "stream_options.reasoning_summary_delivery").String())
+	require.False(t, gjson.GetBytes(normalized, "stream_options.include_usage").Exists())
 	require.True(t, gjson.GetBytes(normalized, "stream").Bool())
 	require.False(t, gjson.GetBytes(normalized, "store").Bool())
+}
+
+func TestNormalizeOpenAIPassthroughOAuthBody_NormalizesStreamOptions(t *testing.T) {
+	tests := []struct {
+		name string
+		body string
+		want string
+	}{
+		{
+			name: "keeps official sequential cutoff",
+			body: `{"model":"gpt-5.4","input":"hello","stream_options":{"reasoning_summary_delivery":"sequential_cutoff"}}`,
+			want: `{"reasoning_summary_delivery":"sequential_cutoff"}`,
+		},
+		{
+			name: "drops compatibility-only fields",
+			body: `{"model":"gpt-5.4","input":"hello","stream_options":{"include_usage":true}}`,
+		},
+		{
+			name: "drops unknown delivery values",
+			body: `{"model":"gpt-5.4","input":"hello","stream_options":{"reasoning_summary_delivery":"streaming"}}`,
+		},
+		{
+			name: "drops non-object values",
+			body: `{"model":"gpt-5.4","input":"hello","stream_options":true}`,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			normalized, _, err := normalizeOpenAIPassthroughOAuthBody([]byte(tt.body), false)
+			require.NoError(t, err)
+			if tt.want == "" {
+				require.False(t, gjson.GetBytes(normalized, "stream_options").Exists())
+				return
+			}
+			require.JSONEq(t, tt.want, gjson.GetBytes(normalized, "stream_options").Raw)
+		})
+	}
 }
 
 func TestNormalizeOpenAIPassthroughOAuthBody_NormalizesCompatibilityFields(t *testing.T) {

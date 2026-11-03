@@ -1,3 +1,4 @@
+import '@/permissions/__tests__/authorizedFixture'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils'
 import UsageCleanupDialog from '../UsageCleanupDialog.vue'
@@ -7,7 +8,7 @@ const { listCleanupTasks, showError } = vi.hoisted(() => ({ listCleanupTasks: vi
 vi.mock('@/components/admin/usage/UsageFilters.vue', () => ({ default: { template: '<div />' } }))
 vi.mock('@/api/admin/usage', () => ({ adminUsageAPI: { listCleanupTasks } }))
 vi.mock('@/stores/app', () => ({ useAppStore: () => ({ showError }) }))
-vi.mock('vue-i18n', () => ({ useI18n: () => ({ t: (key: string) => key }) }))
+vi.mock('vue-i18n', async (importOriginal) => ({ ...await importOriginal<typeof import('vue-i18n')>(), useI18n: () => ({ t: (key: string) => key }) }))
 enableAutoUnmount(afterEach)
 beforeEach(() => { vi.clearAllMocks(); vi.spyOn(console, 'error').mockImplementation(() => {}) })
 afterEach(() => { vi.restoreAllMocks() })

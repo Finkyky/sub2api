@@ -1,6 +1,9 @@
 <template>
   <BaseDialog :show="show" :title="t('admin.users.userApiKeys')" width="wide" @close="handleClose">
-    <div v-if="user" class="space-y-4">
+    <p v-if="!auth.hasPermission('api_keys.read')" role="status">{{ rt('rbac.noPermission') }}</p>
+    <div v-if="error" role="alert" class="text-sm text-red-600">{{ error }} <button class="btn btn-secondary" @click="load">{{ rt('rbac.retry') }}</button></div>
+    <div v-if="groupError" role="alert" class="text-sm text-red-600">{{ groupError }} <button class="btn btn-secondary" @click="loadGroups">{{ rt('rbac.retry') }}</button></div>
+    <div v-if="user && auth.hasPermission('api_keys.read')" class="space-y-4">
       <div class="flex items-center gap-3 rounded-xl bg-gray-50 p-4 dark:bg-dark-700">
         <div class="flex h-10 w-10 items-center justify-center rounded-full bg-primary-100 dark:bg-primary-900/30">
           <span class="text-lg font-medium text-primary-700 dark:text-primary-300">{{ user.email.charAt(0).toUpperCase() }}</span>
@@ -24,7 +27,7 @@
                 :ref="(el) => setGroupButtonRef(key.id, el)"
                 @click="openGroupSelector(key)"
                 class="-mx-1 -my-0.5 flex cursor-pointer items-center gap-1 rounded-md px-1 py-0.5 transition-colors hover:bg-gray-100 dark:hover:bg-dark-700"
-                :disabled="updatingKeyIds.has(key.id)"
+                :disabled="updatingKeyIds.has(key.id) || !canChangeGroup || !groupsLoaded"
               >
                 <GroupBadge
                   v-if="key.group_id && key.group"
@@ -52,7 +55,7 @@
   <!-- Group Selector Dropdown -->
   <Teleport to="body">
     <div
-      v-if="groupSelectorKeyId !== null && dropdownPosition"
+      v-if="canChangeGroup && groupsLoaded && groupSelectorKeyId !== null && dropdownPosition"
       ref="dropdownRef"
       class="animate-in fade-in slide-in-from-top-2 fixed z-[100000020] w-64 overflow-hidden rounded-xl bg-white shadow-lg ring-1 ring-black/5 duration-200 dark:bg-dark-800 dark:ring-white/10"
       :style="{ top: dropdownPosition.top + 'px', left: dropdownPosition.left + 'px' }"
@@ -106,6 +109,8 @@
 </template>
 
 <script setup lang="ts">
+import { useAuthStore } from '@/stores/auth'
+import { rbacMessages } from '@/components/admin/rbac/messages'
 import { ref, computed, watch, onMounted, onUnmounted, type ComponentPublicInstance } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useAppStore } from '@/stores/app'
@@ -116,15 +121,20 @@ import BaseDialog from '@/components/common/BaseDialog.vue'
 import GroupBadge from '@/components/common/GroupBadge.vue'
 import GroupOptionItem from '@/components/common/GroupOptionItem.vue'
 
+const auth = useAuthStore()
+
 const props = defineProps<{ show: boolean; user: AdminUser | null }>()
 const emit = defineEmits(['close'])
 const { t } = useI18n()
+const { t: rt } = useI18n({ useScope: 'local', messages: rbacMessages })
 const appStore = useAppStore()
 
 const apiKeys = ref<ApiKey[]>([])
 const allGroups = ref<AdminGroup[]>([])
+const error = ref(''), groupError = ref(''), groupsLoaded = ref(false)
+const canChangeGroup = computed(() => auth.hasPermission('api_keys.read') && auth.hasPermission('api_keys.update') && auth.hasPermission('groups.read'))
+let keysGeneration = 0, groupsGeneration = 0
 const loading = ref(false)
-let requestVersion = 0
 const updatingKeyIds = ref(new Set<number>())
 const groupSelectorKeyId = ref<number | null>(null)
 const dropdownPosition = ref<{ top: number; left: number } | null>(null)
@@ -145,38 +155,29 @@ const setGroupButtonRef = (keyId: number, el: Element | ComponentPublicInstance 
   }
 }
 
-watch(() => [props.show, props.user?.id] as const, ([show], _, onCleanup) => {
-  onCleanup(() => { requestVersion++ })
-  closeGroupSelector()
-  if (show && props.user) {
-    load()
-    loadGroups()
-  }
-})
-
 const load = async () => {
-  if (!props.user) return
-  const version = ++requestVersion
-  apiKeys.value = []
+  const seq = ++keysGeneration
+  apiKeys.value = []; error.value = ''; loading.value = false
+  if (!props.show || !props.user || !auth.hasPermission('api_keys.read')) return
   loading.value = true
   groupButtonRefs.value.clear()
   try {
     const res = await adminAPI.users.getUserApiKeys(props.user.id)
-    if (version === requestVersion) apiKeys.value = res.items || []
-  } catch (error) {
-    if (version !== requestVersion) return
-    console.error('Failed to load API keys:', error)
-  } finally {
-    if (version === requestVersion) loading.value = false
-  }
+    if (seq === keysGeneration) apiKeys.value = res.items || []
+  } catch {
+    if (seq === keysGeneration) error.value = rt('rbac.loadFailed')
+  } finally { if (seq === keysGeneration) loading.value = false }
 }
-
 const loadGroups = async () => {
+  const seq = ++groupsGeneration
+  groupsLoaded.value = false; allGroups.value = []; groupError.value = ''
+  if (!props.show || !canChangeGroup.value) return
   try {
     const groups = await adminAPI.groups.getAll()
-    allGroups.value = groups
-  } catch (error) {
-    console.error('Failed to load groups:', error)
+    if (seq !== groupsGeneration) return
+    allGroups.value = groups; groupsLoaded.value = true
+  } catch {
+    if (seq === groupsGeneration) groupError.value = rt('rbac.loadFailed')
   }
 }
 
@@ -184,6 +185,7 @@ const DROPDOWN_HEIGHT = 272 // max-h-64 = 16rem = 256px + padding
 const DROPDOWN_GAP = 4
 
 const openGroupSelector = (key: ApiKey) => {
+  if (!canChangeGroup.value || !groupsLoaded.value || updatingKeyIds.value.has(key.id)) return
   if (groupSelectorKeyId.value === key.id) {
     closeGroupSelector()
   } else {
@@ -207,6 +209,8 @@ const closeGroupSelector = () => {
 }
 
 const changeGroup = async (key: ApiKey, newGroupId: number | null) => {
+  if (!canChangeGroup.value || !groupsLoaded.value || updatingKeyIds.value.has(key.id)) return
+  if (newGroupId !== null && !allGroups.value.some(group => group.id === newGroupId)) return
   closeGroupSelector()
   if (key.group_id === newGroupId || (!key.group_id && newGroupId === null)) return
 
@@ -253,12 +257,15 @@ const handleClose = () => {
   emit('close')
 }
 
+watch(() => [props.show, props.user?.id, auth.hasPermission('api_keys.read')], () => { closeGroupSelector(); void load() }, { immediate: true })
+watch(() => [props.show, props.user?.id, canChangeGroup.value], () => { closeGroupSelector(); void loadGroups() }, { immediate: true })
 onMounted(() => {
   document.addEventListener('click', handleClickOutside)
   document.addEventListener('keydown', handleKeyDown, true)
 })
 
 onUnmounted(() => {
+  keysGeneration++; groupsGeneration++
   document.removeEventListener('click', handleClickOutside)
   document.removeEventListener('keydown', handleKeyDown, true)
 })

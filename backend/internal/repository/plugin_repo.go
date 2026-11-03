@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"time"
 
@@ -73,6 +74,16 @@ func (r *pluginRepository) Install(ctx context.Context, plugin *service.PluginIn
 		return nil, err
 	}
 	defer func() { _ = tx.Rollback() }()
+	// Serialize same-key installers even when the installation row does not exist
+	// yet. A following row lock then coordinates with instance creation.
+	if _, err := tx.ExecContext(ctx, `SELECT pg_advisory_xact_lock(hashtextextended($1, 764635621))`, "sub2api:plugin-install:"+plugin.PluginKey); err != nil {
+		return nil, err
+	}
+	// Serialize with instance creation before taking the upsert statement snapshot.
+	var existingID int64
+	if err := tx.QueryRowContext(ctx, `SELECT id FROM sub2api_plugin_installations WHERE plugin_key=$1 FOR UPDATE`, plugin.PluginKey).Scan(&existingID); err != nil && !errors.Is(err, sql.ErrNoRows) {
+		return nil, err
+	}
 	row := tx.QueryRowContext(ctx, `
 			INSERT INTO sub2api_plugin_installations (
 				plugin_key, name, version, description, author, manifest, artifact_data,
@@ -102,6 +113,10 @@ func (r *pluginRepository) Install(ctx context.Context, plugin *service.PluginIn
 			SELECT 1 FROM sub2api_plugin_bindings b
 			WHERE b.plugin_id = sub2api_plugin_installations.id AND b.enabled = TRUE
 		  )
+          AND NOT EXISTS (
+            SELECT 1 FROM sub2api_plugin_instances i
+            WHERE i.plugin_id = sub2api_plugin_installations.id
+          )
 		RETURNING id
 	`, plugin.PluginKey, plugin.Name, plugin.Version, plugin.Description, plugin.Author, manifestJSON, plugin.ArtifactData,
 		plugin.ArtifactPath, plugin.InstallPath, plugin.BinaryPath, plugin.BinarySHA256,
@@ -133,6 +148,7 @@ func (r *pluginRepository) Delete(ctx context.Context, id int64, expectedBinaryS
 		DELETE FROM sub2api_plugin_installations p
 		WHERE p.id = $1 AND p.binary_sha256 = $2 AND p.state NOT IN ('starting', 'enabled')
 		  AND NOT EXISTS (SELECT 1 FROM sub2api_plugin_bindings b WHERE b.plugin_id = p.id AND b.enabled = TRUE)
+          AND NOT EXISTS (SELECT 1 FROM sub2api_plugin_instances i WHERE i.plugin_id = p.id)
 	`, id, expectedBinarySHA256)
 	if err != nil {
 		return err

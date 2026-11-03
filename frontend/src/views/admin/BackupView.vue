@@ -1,7 +1,7 @@
 <template>
     <div class="space-y-6">
       <!-- S3 Storage Config -->
-      <div class="card p-6">
+      <div v-if="can('@super')" class="card p-6">
         <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
           <div>
             <h3 class="text-base font-semibold text-gray-900 dark:text-white">
@@ -45,17 +45,17 @@
           </label>
         </div>
         <div class="mt-4 flex flex-wrap gap-2">
-          <button type="button" class="btn btn-secondary btn-sm" :disabled="testingS3" @click="testS3">
+          <button v-permission="'@super'" type="button" class="btn btn-secondary btn-sm" :disabled="testingS3" @click="testS3">
             {{ testingS3 ? t('common.loading') : t('admin.backup.s3.testConnection') }}
           </button>
-          <button type="button" class="btn btn-primary btn-sm" :disabled="savingS3" @click="saveS3Config">
+          <button v-permission="'@super'" type="button" class="btn btn-primary btn-sm" :disabled="savingS3" @click="saveS3Config">
             {{ savingS3 ? t('common.loading') : t('common.save') }}
           </button>
         </div>
       </div>
 
       <!-- Async image object storage -->
-      <div class="card p-6">
+      <div v-if="can('@super')" class="card p-6">
         <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
           <div>
             <h3 class="text-base font-semibold text-gray-900 dark:text-white">
@@ -120,10 +120,10 @@
         </div>
 
         <div class="mt-4 flex flex-wrap gap-2">
-          <button type="button" class="btn btn-secondary btn-sm" :disabled="testingImageStorage" @click="testImageStorage">
+          <button v-permission="'@super'" type="button" class="btn btn-secondary btn-sm" :disabled="testingImageStorage" @click="testImageStorage">
             {{ testingImageStorage ? t('common.loading') : t('admin.backup.s3.testConnection') }}
           </button>
-          <button type="button" class="btn btn-primary btn-sm" :disabled="savingImageStorage" @click="saveImageStorageConfig">
+          <button v-permission="'@super'" type="button" class="btn btn-primary btn-sm" :disabled="savingImageStorage" @click="saveImageStorageConfig">
             {{ savingImageStorage ? t('common.loading') : t('common.save') }}
           </button>
         </div>
@@ -169,7 +169,7 @@
           <p>{{ retentionPreview }}</p>
         </div>
         <div class="mt-4">
-          <button type="button" class="btn btn-primary btn-sm" :disabled="savingSchedule || !!scheduleValidationError" @click="saveSchedule">
+          <button v-permission="'@super'" type="button" class="btn btn-primary btn-sm" :disabled="savingSchedule || !!scheduleValidationError" @click="saveSchedule">
             {{ savingSchedule ? t('common.loading') : t('common.save') }}
           </button>
         </div>
@@ -191,7 +191,7 @@
               <label class="text-xs text-gray-600 dark:text-gray-400">{{ t('admin.backup.operations.expireDays') }}</label>
               <input v-model.number="manualExpireDays" type="number" min="0" class="input w-20 text-xs" />
             </div>
-            <button type="button" class="btn btn-primary btn-sm" :disabled="creatingBackup" @click="createBackup">
+            <button v-permission="'@super'" type="button" class="btn btn-primary btn-sm" :disabled="creatingBackup" @click="createBackup">
               {{ creatingBackup ? t('admin.backup.operations.backing') : t('admin.backup.operations.createBackup') }}
             </button>
             <button type="button" class="btn btn-secondary btn-sm" :disabled="loadingBackups" @click="loadBackups">
@@ -246,7 +246,7 @@
                 <td class="py-3 pr-4 text-xs">{{ formatDate(record.started_at) }}</td>
                 <td class="py-3 text-xs">
                   <div class="flex flex-wrap gap-1">
-                    <button
+                    <button v-permission="'@super'"
                       v-if="record.status === 'completed'"
                       type="button"
                       class="btn btn-secondary btn-xs"
@@ -254,7 +254,7 @@
                     >
                       {{ t('admin.backup.actions.download') }}
                     </button>
-                    <button
+                    <button v-permission="'@super'"
                       v-if="record.status === 'completed'"
                       type="button"
                       class="btn btn-secondary btn-xs"
@@ -263,7 +263,7 @@
                     >
                       {{ restoringId === record.id ? t('common.loading') : t('admin.backup.actions.restore') }}
                     </button>
-                    <button
+                    <button v-permission="'@super'"
                       v-if="record.status !== 'running'"
                       type="button"
                       class="btn btn-danger btn-xs"
@@ -414,6 +414,8 @@
 </template>
 
 <script setup lang="ts">
+import { usePermission } from '@/composables/usePermission'
+const { can } = usePermission()
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { adminAPI } from '@/api'
@@ -654,6 +656,7 @@ const r2ConfigRows = computed(() => [
 ])
 
 async function loadS3Config() {
+  if (!can('@super')) return
   try {
     const cfg = await adminAPI.backup.getS3Config()
     s3Form.value = {
@@ -672,6 +675,7 @@ async function loadS3Config() {
 }
 
 async function saveS3Config() {
+  if (!can('@super')) return
   savingS3.value = true
   try {
     await backupStepUp.run(() => adminAPI.backup.updateS3Config(s3Form.value))
@@ -689,6 +693,7 @@ async function saveS3Config() {
 }
 
 async function loadImageStorageConfig() {
+  if (!can('@super')) return
   try {
     const { config, secret_configured } = await adminAPI.backup.getImageStorageConfig()
     imageStorageForm.value = {
@@ -704,6 +709,7 @@ async function loadImageStorageConfig() {
 }
 
 async function saveImageStorageConfig() {
+  if (!can('@super')) return
   savingImageStorage.value = true
   try {
     await backupStepUp.run(() => adminAPI.backup.updateImageStorageConfig(imageStorageForm.value))
@@ -721,6 +727,7 @@ async function saveImageStorageConfig() {
 }
 
 async function testImageStorage() {
+  if (!can('@super')) return
   testingImageStorage.value = true
   try {
     const result = await adminAPI.backup.testImageStorageConnection(imageStorageForm.value)
@@ -737,6 +744,7 @@ async function testImageStorage() {
 }
 
 async function testS3() {
+  if (!can('@super')) return
   testingS3.value = true
   try {
     const result = await adminAPI.backup.testS3Connection(s3Form.value)
@@ -775,6 +783,7 @@ async function loadSchedule() {
 
 async function saveSchedule() {
   if (scheduleValidationError.value) return
+  if (!can('@super')) return
   savingSchedule.value = true
   try {
     const archive = archivePayload.value
@@ -801,6 +810,7 @@ async function loadBackups() {
 }
 
 async function createBackup() {
+  if (!can('@super')) return
   creatingBackup.value = true
   try {
     const record = await backupStepUp.run(() => adminAPI.backup.createBackup({ expire_days: manualExpireDays.value }))

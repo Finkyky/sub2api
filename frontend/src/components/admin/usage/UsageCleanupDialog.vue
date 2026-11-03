@@ -87,14 +87,14 @@
         <button type="button" class="btn btn-secondary" @click="handleClose">
           {{ t('common.cancel') }}
         </button>
-        <button type="button" class="btn btn-danger" :disabled="submitting" @click="openConfirm">
+        <button v-permission="'usage.manage'" type="button" class="btn btn-danger" :disabled="submitting" @click="openConfirm">
           {{ submitting ? t('admin.usage.cleanup.submitting') : t('admin.usage.cleanup.submit') }}
         </button>
       </div>
     </template>
   </BaseDialog>
 
-  <ConfirmDialog
+  <ConfirmDialog v-if="can('usage.manage')"
     :show="confirmVisible"
     :title="t('admin.usage.cleanup.confirmTitle')"
     :message="t('admin.usage.cleanup.confirmMessage')"
@@ -104,7 +104,7 @@
     @cancel="confirmVisible = false"
   />
 
-  <ConfirmDialog
+  <ConfirmDialog v-if="can('usage.manage')"
     :show="cancelConfirmVisible"
     :title="t('admin.usage.cleanup.cancelConfirmTitle')"
     :message="t('admin.usage.cleanup.cancelConfirmMessage')"
@@ -116,6 +116,8 @@
 </template>
 
 <script setup lang="ts">
+import { usePermission } from '@/composables/usePermission'
+const { can } = usePermission()
 import { ref, watch, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useAppStore } from '@/stores/app'

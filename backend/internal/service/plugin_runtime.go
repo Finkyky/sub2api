@@ -35,9 +35,24 @@ type pluginRuntime struct {
 	doneOnce     sync.Once
 }
 
+// requireTransportPluginManifest applies before both fresh starts and cached
+// runtime dispatch: another node may have replaced the database installation.
+func requireTransportPluginManifest(manifest PluginManifest) error {
+	if manifest.SchemaVersion == 2 || manifest.General != nil || manifest.Requires.GeneralAPI != 0 {
+		return ErrPluginGeneralRuntimeUnavailable
+	}
+	if manifest.SchemaVersion != 1 {
+		return errors.New("transport runtime requires manifest schema 1")
+	}
+	return nil
+}
+
 func startPluginRuntime(ctx context.Context, installation *PluginInstallation, startTimeout time.Duration, socketDir string, hostServices pluginv1.HostServiceServer) (*pluginRuntime, error) {
 	if installation == nil {
 		return nil, errors.New("插件安装记录为空")
+	}
+	if err := requireTransportPluginManifest(installation.Manifest); err != nil {
+		return nil, err
 	}
 	checksum, err := hex.DecodeString(installation.BinarySHA256)
 	if err != nil || len(checksum) != sha256.Size {

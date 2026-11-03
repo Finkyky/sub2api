@@ -5,7 +5,7 @@
     width="wide"
     @close="emit('close')"
   >
-    <form id="provider-form" @submit.prevent="handleSave" class="space-y-4">
+    <form v-permission="'payments.configure'" id="provider-form" @submit.prevent="handleSave" class="space-y-4">
       <!-- Name + Key -->
       <div class="grid grid-cols-2 gap-4">
         <div>
@@ -296,7 +296,7 @@
     <template #footer>
       <div class="flex justify-end gap-3">
         <button type="button" @click="emit('close')" class="btn btn-secondary">{{ t('common.cancel') }}</button>
-        <button type="submit" form="provider-form" :disabled="saving" class="btn btn-primary">
+        <button v-permission="'payments.configure'" type="submit" form="provider-form" :disabled="saving" class="btn btn-primary">
           {{ saving ? t('common.saving') : t('common.save') }}
         </button>
       </div>

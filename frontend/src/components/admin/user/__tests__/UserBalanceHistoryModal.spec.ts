@@ -1,6 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils'
 import type { AdminUser } from '@/types'
+
+vi.mock('@/stores/auth', () => ({ useAuthStore: () => ({ hasPermission: () => true }) }))
 import UserBalanceHistoryModal from '../UserBalanceHistoryModal.vue'
 
 const mocks = vi.hoisted(() => ({ getUserBalanceHistory: vi.fn() }))

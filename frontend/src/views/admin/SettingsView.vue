@@ -9,7 +9,7 @@
       </div>
 
       <!-- Settings Form -->
-      <form v-else @submit.prevent="saveSettings" class="space-y-6" novalidate>
+      <form v-else @submit.prevent="can('settings.update') && saveSettings()" class="space-y-6" novalidate>
         <!-- Tab Navigation -->
         <div class="settings-tabs-shell">
           <nav
@@ -46,9 +46,9 @@
 
         <!-- Tab: Security — Admin API Key -->
         <div v-show="activeTab === 'security'" class="space-y-6">
-          <AdminAccessKeysSettings />
+          <AdminAccessKeysSettings v-if="can('@super')" />
           <!-- 已有全权密钥只提供轮换和删除入口。 -->
-          <details v-if="adminApiKeyExists" class="card">
+          <details v-if="can('@super') && adminApiKeyExists" class="card">
             <summary class="cursor-pointer px-6 py-4 font-medium">{{ t("adminAccessKeys.legacy") }}</summary>
             <div
               class="border-b border-gray-100 px-6 py-4 dark:border-dark-700"
@@ -104,7 +104,7 @@
                     </code>
                   </div>
                   <div class="flex gap-2">
-                    <button
+                    <button v-permission="'@super'"
                       type="button"
                       @click="regenerateAdminApiKey"
                       :disabled="adminApiKeyOperating"
@@ -116,7 +116,7 @@
                           : t("admin.settings.adminApiKey.regenerate")
                       }}
                     </button>
-                    <button
+                    <button v-permission="'@super'"
                       type="button"
                       @click="deleteAdminApiKey"
                       :disabled="adminApiKeyOperating"
@@ -227,7 +227,7 @@
                 <div
                   class="flex justify-end border-t border-gray-100 pt-4 dark:border-dark-700"
                 >
-                  <button
+                  <button v-permission="'settings.update'"
                     type="button"
                     @click="saveOverloadCooldownSettings"
                     :disabled="overloadCooldownSaving"
@@ -334,7 +334,7 @@
                 <div
                   class="flex justify-end border-t border-gray-100 pt-4 dark:border-dark-700"
                 >
-                  <button
+                  <button v-permission="'settings.update'"
                     type="button"
                     @click="saveRateLimit429CooldownSettings"
                     :disabled="rateLimit429CooldownSaving"
@@ -514,7 +514,7 @@
                 <div
                   class="flex justify-end border-t border-gray-100 pt-4 dark:border-dark-700"
                 >
-                  <button
+                  <button v-permission="'settings.update'"
                     type="button"
                     @click="saveStreamTimeoutSettings"
                     :disabled="streamTimeoutSaving"
@@ -716,7 +716,7 @@
                 <div
                   class="flex justify-end border-t border-gray-100 pt-4 dark:border-dark-700"
                 >
-                  <button
+                  <button v-permission="'settings.update'"
                     type="button"
                     @click="saveRectifierSettings"
                     :disabled="rectifierSaving"
@@ -995,7 +995,7 @@
                 <div
                   class="flex justify-end border-t border-gray-100 pt-4 dark:border-dark-700"
                 >
-                  <button
+                  <button v-permission="'settings.update'"
                     type="button"
                     @click="saveBetaPolicySettings"
                     :disabled="betaPolicySaving"
@@ -1955,7 +1955,7 @@
                 <div
                   class="flex justify-end border-t border-gray-100 pt-4 dark:border-dark-700"
                 >
-                  <button
+                  <button v-permission="'settings.update'"
                     type="button"
                     data-testid="panel-rate-limit-save"
                     @click="savePanelRateLimitSettings"
@@ -4462,6 +4462,42 @@
               </h2>
             </div>
             <div class="p-6 space-y-4">
+                <div class="flex items-center justify-between gap-4">
+                  <div class="min-w-0">
+                    <h3 class="text-base font-semibold text-gray-900 dark:text-white">
+                      {{ t("admin.settings.gatewayForwarding.codexTicketEnabled") }}
+                    </h3>
+                    <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                      {{ t("admin.settings.gatewayForwarding.codexTicketEnabledDesc") }}
+                    </p>
+                  </div>
+                  <Toggle
+                    id="codex-ticket-enabled"
+                    v-model="form.openai_codex_ticket_enabled"
+                  />
+                </div>
+                <div>
+                  <h3 class="text-base font-semibold text-gray-900 dark:text-white">
+                    {{ t("admin.settings.gatewayForwarding.codexTicketHarvestProxy") }}
+                  </h3>
+                  <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                    {{ t("admin.settings.gatewayForwarding.codexTicketHarvestProxyDesc") }}
+                  </p>
+                  <input
+                    id="codex-ticket-harvest-proxy"
+                    v-model="form.openai_codex_ticket_harvest_proxy_url"
+                    type="text"
+                    class="input mt-3 w-full font-mono text-sm"
+                    :placeholder="t('admin.settings.gatewayForwarding.codexTicketHarvestProxyPlaceholder')"
+                    autocomplete="off"
+                  />
+                  <p
+                    v-if="form.openai_codex_ticket_harvest_proxy_configured"
+                    class="mt-1.5 text-xs text-gray-500 dark:text-gray-400"
+                  >
+                    {{ t("admin.settings.gatewayForwarding.codexTicketHarvestProxyConfigured") }}
+                  </p>
+                </div>
                 <div>
                   <h3 class="text-base font-semibold text-gray-900 dark:text-white">
                     {{ t("admin.settings.gatewayForwarding.codexClientRestrictionTitle") }}
@@ -4750,7 +4786,7 @@
                   >
                     {{ t("admin.settings.upstreamBillingProbe.intervalMinutes") }}
                   </label>
-                  <input
+                  <input v-permission="'accounts.update'"
                     id="upstream-billing-probe-interval"
                     v-model.number="upstreamBillingProbeForm.interval_minutes"
                     type="number"
@@ -4768,7 +4804,7 @@
                 <div
                   class="flex justify-end border-t border-gray-100 pt-4 dark:border-dark-700"
                 >
-                  <button
+                  <button v-permission="'accounts.update'"
                     type="button"
                     class="btn btn-primary btn-sm"
                     :disabled="upstreamBillingProbeSaving"
@@ -4822,7 +4858,7 @@
                     <label class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300" for="ollama-cloud-usage-debounce">
                       {{ t("admin.settings.ollamaCloudUsage.debounceMinutes") }}
                     </label>
-                    <input
+                    <input v-permission="'accounts.update'"
                       id="ollama-cloud-usage-debounce"
                       v-model.number="ollamaCloudUsageForm.debounce_minutes"
                       type="number"
@@ -4840,7 +4876,7 @@
                     <label class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300" for="ollama-cloud-usage-interval">
                       {{ t("admin.settings.ollamaCloudUsage.intervalMinutes") }}
                     </label>
-                    <input
+                    <input v-permission="'accounts.update'"
                       id="ollama-cloud-usage-interval"
                       v-model.number="ollamaCloudUsageForm.interval_minutes"
                       type="number"
@@ -4856,7 +4892,7 @@
                   </div>
                 </div>
                 <div class="flex justify-end border-t border-gray-100 pt-4 dark:border-dark-700">
-                  <button
+                  <button v-permission="'accounts.update'"
                     type="button"
                     class="btn btn-primary btn-sm"
                     :disabled="ollamaCloudUsageSaving"
@@ -5935,7 +5971,7 @@
                   class="rounded-lg border border-gray-200 dark:border-dark-600"
                 >
                   <!-- Collapsible header -->
-                  <div
+                  <div v-permission="'settings.update'"
                     class="flex cursor-pointer items-center justify-between px-4 py-3"
                     @click="toggleProviderExpand(pIdx)"
                   >
@@ -6195,7 +6231,7 @@
                             : "∞"
                         }}</span
                       >
-                      <button
+                      <button v-permission="'settings.update'"
                         v-if="(provider.quota_used ?? 0) > 0"
                         type="button"
                         class="text-xs text-primary-600 hover:text-primary-700"
@@ -6216,7 +6252,7 @@
                           :proxies="webSearchProxies"
                         />
                       </div>
-                      <button
+                      <button v-permission="'settings.update'"
                         type="button"
                         class="btn btn-secondary btn-sm whitespace-nowrap"
                         @click="openTestDialog()"
@@ -6245,7 +6281,7 @@
                 {{ t("admin.settings.webSearchEmulation.testResultTitle") }}
               </h3>
               <div class="flex items-center gap-2">
-                <input
+                <input v-permission="'settings.update'"
                   v-model="wsTestQuery"
                   type="text"
                   class="input flex-1 text-sm"
@@ -6254,7 +6290,7 @@
                   "
                   @keyup.enter="testWebSearchProvider()"
                 />
-                <button
+                <button v-permission="'settings.update'"
                   type="button"
                   class="btn btn-primary btn-sm"
                   :disabled="wsTestLoading"
@@ -7578,7 +7614,7 @@
                       {{ t('admin.settings.features.affiliate.customUsers.description') }}
                     </p>
                   </div>
-                  <button
+                  <button v-permission="'affiliates.manage'"
                     type="button"
                     class="btn btn-primary btn-sm"
                     @click="openAffiliateModal(null)"
@@ -7595,7 +7631,7 @@
                     :placeholder="t('admin.settings.features.affiliate.customUsers.searchPlaceholder')"
                     @input="onAffiliateSearchInput"
                   />
-                  <button
+                  <button v-permission="'affiliates.manage'"
                     v-if="affiliateState.selected.length > 0"
                     type="button"
                     class="btn btn-secondary btn-sm"
@@ -7657,10 +7693,10 @@
                         </td>
                         <td class="px-3 py-2 text-sm">
                           <div class="flex items-center gap-2">
-                            <button type="button" class="text-primary-600 hover:underline" @click="openAffiliateModal(entry)">
+                            <button v-permission="'affiliates.manage'" type="button" class="text-primary-600 hover:underline" @click="openAffiliateModal(entry)">
                               {{ t('common.edit') }}
                             </button>
-                            <button
+                            <button v-permission="'affiliates.manage'"
                               type="button"
                               class="text-red-600 hover:underline"
                               @click="askResetAffiliateUser(entry)"
@@ -7815,7 +7851,7 @@
                 <button type="button" class="btn btn-secondary" @click="closeAffiliateModal">
                   {{ t('common.cancel') }}
                 </button>
-                <button
+                <button v-permission="'affiliates.manage'"
                   type="button"
                   class="btn btn-primary"
                   :disabled="affiliateModal.saving || !affiliateModalCanSubmit"
@@ -7860,7 +7896,7 @@
               <button type="button" class="btn btn-secondary" @click="affiliateBatchModal.open = false">
                 {{ t('common.cancel') }}
               </button>
-              <button
+              <button v-permission="'affiliates.manage'"
                 type="button"
                 class="btn btn-primary"
                 :disabled="affiliateBatchModal.saving"
@@ -8301,7 +8337,7 @@
                       t("admin.settings.payment.alipayMobilePrecreateDeepLink")
                     }}</label>
                     <div class="flex items-center gap-2">
-                      <button
+                      <button v-permission="'payments.configure'"
                         type="button"
                         :class="[
                           'relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2',
@@ -8335,7 +8371,7 @@
                     t("admin.settings.payment.enabledPaymentTypes")
                   }}</label>
                   <div class="mt-1.5 flex flex-wrap gap-2">
-                    <button
+                    <button v-permission="'payments.configure'"
                       v-for="pt in allPaymentTypes"
                       :key="pt.value"
                       type="button"
@@ -8470,7 +8506,7 @@
                   {{ t("admin.settings.smtp.description") }}
                 </p>
               </div>
-              <button
+              <button v-permission="'settings.update'"
                 type="button"
                 @click="testSmtpConnection"
                 :disabled="testingSmtp || loadFailed"
@@ -8649,7 +8685,7 @@
                     "
                   />
                 </div>
-                <button
+                <button v-permission="'settings.update'"
                   type="button"
                   @click="sendTestEmail"
                   :disabled="
@@ -8858,12 +8894,12 @@
 
         <!-- Tab: Backup -->
         <div v-show="activeTab === 'backup'">
-          <BackupSettings />
+          <BackupSettings v-if="can('backups.read')" />
         </div>
 
         <!-- Save Button -->
         <div v-show="activeTab !== 'backup'" class="flex justify-end">
-          <button
+          <button v-permission="'settings.update'"
             type="submit"
             :disabled="saving || loadFailed"
             class="btn btn-primary"
@@ -8910,7 +8946,7 @@
         @close="showProviderDialog = false"
         @save="handleSaveProvider"
       />
-      <ConfirmDialog
+      <ConfirmDialog v-if="can('payments.configure')"
         :show="showDeleteProviderDialog"
         :title="t('admin.settings.payment.deleteProvider')"
         :message="t('admin.settings.payment.deleteProviderConfirm')"
@@ -8919,7 +8955,7 @@
         @confirm="handleDeleteProvider"
         @cancel="showDeleteProviderDialog = false"
       />
-      <ConfirmDialog
+      <ConfirmDialog v-if="can('affiliates.manage')"
         :show="affiliateConfirmDialog.show"
         :title="affiliateConfirmDialog.title"
         :message="affiliateConfirmDialog.message"
@@ -8935,6 +8971,8 @@
 </template>
 
 <script setup lang="ts">
+import { usePermission } from '@/composables/usePermission'
+const { can } = usePermission()
 import { ref, reactive, computed, onMounted, watch } from "vue";
 import { listPlatformIds } from "@/constants/platformCatalog";
 import { useI18n } from "vue-i18n";
@@ -9995,6 +10033,9 @@ const form = reactive<SettingsForm>({
   // 只读展示：自动同步任务写入的官方最新稳定版，不参与提交（提交载荷按字段显式构造）
   claude_code_client_version_synced: "",
   claude_code_version_auto_sync_enabled: true,
+  openai_codex_ticket_enabled: false,
+  openai_codex_ticket_harvest_proxy_url: "",
+  openai_codex_ticket_harvest_proxy_configured: false,
   // codex_cli_only 加固
   min_codex_version: "",
   max_codex_version: "",
@@ -11192,6 +11233,7 @@ async function loadSettings() {
 }
 
 async function loadSubscriptionGroups() {
+  if (!can('groups.read')) return;
   try {
     const groups = await adminAPI.groups.getAll();
     subscriptionGroups.value = groups.filter(
@@ -11278,6 +11320,7 @@ const siteBillingModeHint = computed(() =>
 );
 
 async function saveSettings() {
+  if (!can('settings.update')) return;
   saving.value = true;
   try {
     const normalizedTableDefaultPageSize = Math.floor(
@@ -11646,6 +11689,9 @@ async function saveSettings() {
       claude_code_client_version: form.claude_code_client_version?.trim() || "",
       claude_code_version_auto_sync_enabled:
         form.claude_code_version_auto_sync_enabled,
+      openai_codex_ticket_enabled: form.openai_codex_ticket_enabled,
+      openai_codex_ticket_harvest_proxy_url:
+        form.openai_codex_ticket_harvest_proxy_url?.trim() || "",
       min_codex_version: form.min_codex_version?.trim() || "",
       max_codex_version: form.max_codex_version?.trim() || "",
       codex_cli_only_allow_app_server_clients:
@@ -11918,6 +11964,7 @@ async function saveSettings() {
 }
 
 async function testSmtpConnection() {
+  if (!can('settings.update')) return;
   testingSmtp.value = true;
   try {
     const smtpPasswordForTest = smtpPasswordManuallyEdited.value
@@ -11944,6 +11991,7 @@ async function testSmtpConnection() {
 }
 
 async function sendTestEmail() {
+  if (!can('settings.update')) return;
   if (!testEmailAddress.value) {
     appStore.showError(t("admin.settings.testEmail.enterRecipientHint"));
     return;
@@ -11977,6 +12025,7 @@ async function sendTestEmail() {
 
 // Admin API Key 方法
 async function loadAdminApiKey() {
+  if (!can('@super')) return;
   adminApiKeyLoading.value = true;
   try {
     const status = await adminAPI.settings.getAdminApiKey();
@@ -11990,7 +12039,7 @@ async function loadAdminApiKey() {
 }
 
 async function createAdminApiKey() {
-  if (!adminApiKeyExists.value) return;
+  if (!can('@super') || !adminApiKeyExists.value) return;
   adminApiKeyOperating.value = true;
   try {
     const result = await settingsStepUp.run(() => adminAPI.settings.regenerateAdminApiKey());
@@ -12008,11 +12057,13 @@ async function createAdminApiKey() {
 }
 
 async function regenerateAdminApiKey() {
+  if (!can('@super')) return;
   if (!confirm(t("admin.settings.adminApiKey.regenerateConfirm"))) return;
   await createAdminApiKey();
 }
 
 async function deleteAdminApiKey() {
+  if (!can('@super')) return;
   if (!confirm(t("admin.settings.adminApiKey.deleteConfirm"))) return;
   adminApiKeyOperating.value = true;
   try {
@@ -12864,7 +12915,7 @@ async function handleReorderProviders(
     await loadProviders();
   } catch (err: unknown) {
     appStore.showError(extractI18nErrorMessage(err, t, "payment.errors", t("common.error")));
-    loadProviders();
+    if (can('payments.read')) loadProviders();
   }
 }
 
@@ -12874,7 +12925,7 @@ async function handleDeleteProvider() {
     await adminAPI.payment.deleteProvider(deletingProviderId.value);
     appStore.showSuccess(t("common.deleted"));
     showDeleteProviderDialog.value = false;
-    loadProviders();
+    if (can('payments.read')) loadProviders();
   } catch (err: unknown) {
     appStore.showError(extractI18nErrorMessage(err, t, "payment.errors", t("common.error")));
   }
@@ -12883,7 +12934,7 @@ async function handleDeleteProvider() {
 onMounted(() => {
   loadSettings();
   loadSubscriptionGroups();
-  loadAdminApiKey();
+  if (can('@super')) loadAdminApiKey();
   loadUpstreamBillingProbeSettings();
   loadOllamaCloudUsageSettings();
   loadOpenCodeGoUsageSettings();
@@ -12893,7 +12944,7 @@ onMounted(() => {
   loadStreamTimeoutSettings();
   loadRectifierSettings();
   loadBetaPolicySettings();
-  loadProviders();
+  if (can('payments.read')) loadProviders();
 });
 
 // =========================
@@ -13038,6 +13089,7 @@ function parseRebateRate(raw: unknown): number | null | undefined {
 }
 
 async function loadAffiliateUsers() {
+  if (!can('affiliates.read')) return;
   affiliateState.loading = true;
   try {
     const res = await affiliatesAPI.listUsers({

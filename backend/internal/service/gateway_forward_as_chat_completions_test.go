@@ -3,6 +3,7 @@
 package service
 
 import (
+	"context"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -17,7 +18,6 @@ import (
 
 func TestHandleCCBufferedFromAnthropic_ToolArgumentsAreValidJSON(t *testing.T) {
 	t.Parallel()
-	gin.SetMode(gin.TestMode)
 
 	rec := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(rec)
@@ -104,7 +104,6 @@ func TestExtractCCReasoningEffortFromBody(t *testing.T) {
 
 func TestHandleCCBufferedFromAnthropic_PreservesMessageStartCacheUsageAndReasoning(t *testing.T) {
 	t.Parallel()
-	gin.SetMode(gin.TestMode)
 
 	rec := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(rec)
@@ -142,7 +141,6 @@ func TestHandleCCBufferedFromAnthropic_PreservesMessageStartCacheUsageAndReasoni
 // without a response"（#4653 同根因；#4657 只修了 /v1/responses 桥）。
 func TestHandleCCBufferedFromAnthropic_CompactSSEFormat(t *testing.T) {
 	t.Parallel()
-	gin.SetMode(gin.TestMode)
 
 	rec := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(rec)
@@ -175,7 +173,6 @@ func TestHandleCCBufferedFromAnthropic_CompactSSEFormat(t *testing.T) {
 
 func TestHandleCCStreamingFromAnthropic_CompactSSEFormat(t *testing.T) {
 	t.Parallel()
-	gin.SetMode(gin.TestMode)
 
 	rec := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(rec)
@@ -211,7 +208,6 @@ func TestHandleCCStreamingFromAnthropic_CompactSSEFormat(t *testing.T) {
 
 func TestHandleCCStreamingFromAnthropic_PreservesMessageStartCacheUsageAndReasoning(t *testing.T) {
 	t.Parallel()
-	gin.SetMode(gin.TestMode)
 
 	rec := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(rec)
@@ -246,4 +242,62 @@ func TestHandleCCStreamingFromAnthropic_PreservesMessageStartCacheUsageAndReason
 	require.NotNil(t, result.ReasoningEffort)
 	require.Equal(t, "medium", *result.ReasoningEffort)
 	require.Contains(t, rec.Body.String(), `[DONE]`)
+}
+
+func TestHandleCCBufferedFromAnthropic_ResponseModelBillingContract(t *testing.T) {
+	for _, kind := range []string{"default source unchanged", "explicit cheaper response", "conflicting response fallback", "unpriced response fallback"} {
+		t.Run(kind, func(t *testing.T) {
+			usage := &openAIRecordUsageLogRepoStub{inserted: true}
+			userRepo := &openAIRecordUsageUserRepoStub{}
+			svc := newGatewayRecordUsageServiceForTest(usage, userRepo, &openAIRecordUsageSubRepoStub{})
+			tokens := UsageTokens{InputTokens: 100, OutputTokens: 50}
+			cheap, pricey, cheapCost, priceyCost := orderedResponseBillingModels(t, svc.billingService, tokens, anthropicCheapFixtureModel, anthropicPriceyFixtureModel)
+			declaration := cheap
+			if kind == "unpriced response fallback" {
+				declaration = "unpriced-model"
+			}
+			start := func(model string) string {
+				b, _ := json.Marshal(map[string]any{"type": "message_start", "message": map[string]any{"id": "msg_contract", "type": "message", "role": "assistant", "model": model, "content": []any{}, "usage": map[string]any{"input_tokens": 100}}})
+				return "event: message_start\ndata: " + string(b) + "\n\n"
+			}
+			payload := ""
+			if kind == "conflicting response fallback" {
+				payload += start(pricey)
+			}
+			payload += start(declaration)
+			payload += `event: content_block_start
+data: {"type":"content_block_start","index":0,"content_block":{"type":"text","text":"answer"}}
+
+event: message_delta
+data: {"type":"message_delta","delta":{"stop_reason":"end_turn"},"usage":{"output_tokens":50}}
+
+event: message_stop
+data: {"type":"message_stop"}
+
+`
+			rec := httptest.NewRecorder()
+			c, _ := gin.CreateTestContext(rec)
+			resp := &http.Response{Header: http.Header{"X-Request-ID": []string{"response-model-contract"}}, Body: io.NopCloser(strings.NewReader(payload))}
+			result, err := svc.handleCCBufferedFromAnthropic(resp, c, pricey, pricey, nil, time.Now())
+			require.NoError(t, err)
+			observed := declaration
+			if kind == "conflicting response fallback" {
+				observed = pricey
+			}
+			require.Equal(t, observed, result.UpstreamResponseModel)
+			require.Equal(t, kind == "conflicting response fallback", result.UpstreamResponseModelConflict)
+			source := BillingModelSourceResponse
+			expected := priceyCost
+			if kind == "default source unchanged" {
+				source = BillingModelSourceChannelMapped
+			}
+			if kind == "explicit cheaper response" {
+				expected = cheapCost
+			}
+			require.NoError(t, svc.RecordUsage(context.Background(), &RecordUsageInput{Result: result, APIKey: &APIKey{ID: 501, Quota: 100}, User: &User{ID: 601}, Account: &Account{ID: 701}, ChannelUsageFields: ChannelUsageFields{OriginalModel: pricey, ChannelMappedModel: pricey, BillingModelSource: source}}))
+			require.NotNil(t, usage.lastLog)
+			require.InDelta(t, expected.ActualCost, usage.lastLog.ActualCost, 1e-12)
+			require.Equal(t, pricey, usage.lastLog.RequestedModel)
+		})
+	}
 }

@@ -31,6 +31,7 @@ var ErrPluginStateChanged = errors.New("插件状态已在其他实例中变化�
 
 // PluginManifest 是 .s2plugin 包中可在执行二进制前检查的声明。
 type PluginManifest struct {
+	General       *PluginGeneralManifest   `json:"general,omitempty"`
 	SchemaVersion int                      `json:"schema_version"`
 	ID            string                   `json:"id"`
 	Name          string                   `json:"name"`
@@ -45,6 +46,7 @@ type PluginManifest struct {
 }
 
 type PluginRequirements struct {
+	GeneralAPI                int      `json:"general_api,omitempty"`
 	Sub2API                   string   `json:"sub2api"`
 	RecommendedSub2APIVersion string   `json:"recommended_sub2api_version,omitempty"`
 	TestedSub2APIVersions     []string `json:"tested_sub2api_versions,omitempty"`
@@ -75,6 +77,8 @@ type PluginSignature struct {
 
 // PluginCompatibility 是管理页面展示和启用门禁共同使用的兼容性结论。
 type PluginCompatibility struct {
+	GeneralAPI         int    `json:"general_api,omitempty"`
+	ReasonCode         string `json:"reason_code,omitempty"`
 	Compatible         bool   `json:"compatible"`
 	Tested             bool   `json:"tested"`
 	Status             string `json:"status"`
@@ -145,7 +149,7 @@ func (m PluginManifest) RuntimeKey() string {
 }
 
 func (m PluginManifest) Validate() error {
-	if m.SchemaVersion != 1 {
+	if m.SchemaVersion != 1 && m.SchemaVersion != 2 {
 		return fmt.Errorf("不支持的插件清单版本: %d", m.SchemaVersion)
 	}
 	if !pluginIDPattern.MatchString(m.ID) || len(m.ID) > 160 {
@@ -160,24 +164,15 @@ func (m PluginManifest) Validate() error {
 	if strings.TrimSpace(m.Requires.Sub2API) == "" {
 		return errors.New("插件必须声明 requires.sub2api")
 	}
-	if m.Requires.PluginProtocol != pluginv1.ProtocolVersion ||
-		m.Requires.TransportAPI != pluginv1.TransportAPIVersion ||
-		m.Requires.UIBridge != pluginv1.UIBridgeVersion {
-		return errors.New("插件协议、传输 API 或 UI Bridge 版本与当前宿主不兼容")
-	}
-	if len(m.Capabilities) == 0 {
-		return errors.New("插件必须声明至少一个能力")
-	}
-	for _, capability := range m.Capabilities {
-		if capability.ID != PluginCapabilityOpenAIOAuthOutbound || capability.Platform != PlatformOpenAI || capability.AccountType != AccountTypeOAuth {
-			return fmt.Errorf("初期仅支持能力 %s", PluginCapabilityOpenAIOAuthOutbound)
-		}
+	if err := m.validateExecutionDeclaration(); err != nil {
+		return err
 	}
 	runtimeEntry, ok := m.Runtimes[m.RuntimeKey()]
 	if !ok || !safePluginRelativePath(runtimeEntry.Path) {
 		return fmt.Errorf("插件不支持当前运行平台 %s", m.RuntimeKey())
 	}
-	if !safePluginRelativePath(m.UI.Entrypoint) || !strings.HasPrefix(m.UI.Entrypoint, "ui/") {
+	headless := m.SchemaVersion == 2 && m.UI.Entrypoint == ""
+	if !headless && (!safePluginRelativePath(m.UI.Entrypoint) || !strings.HasPrefix(m.UI.Entrypoint, "ui/")) {
 		return errors.New("插件 UI 入口必须位于 ui/ 目录")
 	}
 	if len(m.Files) == 0 {
@@ -191,7 +186,7 @@ func (m PluginManifest) Validate() error {
 	if _, ok := m.Files[runtimeEntry.Path]; !ok {
 		return errors.New("运行时二进制未包含在文件哈希声明中")
 	}
-	if _, ok := m.Files[m.UI.Entrypoint]; !ok {
+	if _, ok := m.Files[m.UI.Entrypoint]; !headless && !ok {
 		return errors.New("UI 入口未包含在文件哈希声明中")
 	}
 	return nil
@@ -211,4 +206,27 @@ func (m PluginManifest) SortedCapabilities() []PluginCapability {
 	out := append([]PluginCapability(nil), m.Capabilities...)
 	sort.Slice(out, func(i, j int) bool { return out[i].ID < out[j].ID })
 	return out
+}
+
+func (m PluginManifest) validateExecutionDeclaration() error {
+	if m.SchemaVersion == 2 {
+		return m.validateGeneralDeclaration()
+	}
+	if m.General != nil || m.Requires.GeneralAPI != 0 {
+		return errors.New("schema 1 cannot declare general plugin fields")
+	}
+	if m.Requires.PluginProtocol != pluginv1.ProtocolVersion ||
+		m.Requires.TransportAPI != pluginv1.TransportAPIVersion ||
+		m.Requires.UIBridge != pluginv1.UIBridgeVersion {
+		return errors.New("插件协议、传输 API 或 UI Bridge 版本与当前宿主不兼容")
+	}
+	if len(m.Capabilities) == 0 {
+		return errors.New("插件必须声明至少一个能力")
+	}
+	for _, capability := range m.Capabilities {
+		if capability.ID != PluginCapabilityOpenAIOAuthOutbound || capability.Platform != PlatformOpenAI || capability.AccountType != AccountTypeOAuth {
+			return fmt.Errorf("初期仅支持能力 %s", PluginCapabilityOpenAIOAuthOutbound)
+		}
+	}
+	return nil
 }

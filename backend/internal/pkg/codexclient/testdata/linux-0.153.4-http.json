@@ -1,0 +1,128 @@
+{
+  "codex_version": "codex-cli 0.153.4",
+  "binary_sha256": "56ef98ab4032d317ab26e9b5e5a175650717351edb16ed9cde0cb6d1734d62da",
+  "os_release": "NAME=\"Alpine Linux\"\nID=alpine\nVERSION_ID=3.22.1\nPRETTY_NAME=\"Alpine Linux v3.22\"\nHOME_URL=\"https://alpinelinux.org/\"\nBUG_REPORT_URL=\"https://gitlab.alpinelinux.org/alpine/aports/-/issues\"\n",
+  "mode": "http2",
+  "tls_backend": "rustls",
+  "tls_client_hello": {
+    "legacy_version": 771,
+    "record_version": 769,
+    "session_id_size": 32,
+    "cipher_suites": [
+      4866,
+      4865,
+      4867,
+      49196,
+      49195,
+      52393,
+      49200,
+      49199,
+      52392,
+      255
+    ],
+    "extensions": [
+      43,
+      5,
+      11,
+      10,
+      35,
+      51,
+      0,
+      16,
+      45,
+      13,
+      23
+    ],
+    "supported_versions": [
+      772,
+      771
+    ],
+    "point_formats": [
+      0
+    ],
+    "supported_groups": [
+      4588,
+      29,
+      23,
+      24
+    ],
+    "key_shares": [
+      {
+        "group": 4588,
+        "size": 1216
+      },
+      {
+        "group": 29,
+        "size": 32
+      }
+    ],
+    "alpn": [
+      "h2",
+      "http/1.1"
+    ],
+    "psk_modes": [
+      1
+    ],
+    "signature_algorithms": [
+      1283,
+      1027,
+      1539,
+      2055,
+      2054,
+      2053,
+      2052,
+      1537,
+      1281,
+      1025
+    ]
+  },
+  "negotiated_alpn": "h2",
+  "headers": {
+    "accept": "text/event-stream",
+    "content-type": "application/json",
+    "originator": "codex_exec",
+    "user-agent": "codex_exec/0.153.4 (Alpine Linux 3.22.1; x86_64) xterm-256color (codex_exec; 0.153.4)"
+  },
+  "header_names": [
+    ":method",
+    ":scheme",
+    ":authority",
+    ":path",
+    "x-codex-beta-features",
+    "x-codex-window-id",
+    "x-codex-turn-metadata",
+    "x-client-request-id",
+    "session-id",
+    "thread-id",
+    "accept",
+    "content-type",
+    "authorization",
+    "originator",
+    "user-agent",
+    "content-length"
+  ],
+  "http2_settings": [
+    [
+      2,
+      0
+    ],
+    [
+      4,
+      2097152
+    ],
+    [
+      5,
+      16384
+    ],
+    [
+      6,
+      16384
+    ]
+  ],
+  "http2_window_updates": [
+    [
+      0,
+      5177345
+    ]
+  ]
+}

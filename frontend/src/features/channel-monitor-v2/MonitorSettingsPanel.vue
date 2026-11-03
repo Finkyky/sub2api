@@ -14,7 +14,7 @@
           {{ t('channelMonitorV2.settings.description') }}
         </p>
       </div>
-      <button
+      <button v-permission="'channels.update'"
         type="button"
         class="btn btn-primary"
         :disabled="saving || !dirty"

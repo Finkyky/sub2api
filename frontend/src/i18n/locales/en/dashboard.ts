@@ -706,6 +706,8 @@ export default {
       perImage: 'Per image'
     },
     nav: {
+    permissions: 'Permissions',
+    roles: 'Roles',
       login: 'Sign In',
       backToDashboard: 'Back to Console'
     }

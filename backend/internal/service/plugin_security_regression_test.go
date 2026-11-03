@@ -163,7 +163,7 @@ func TestPluginRuntimeRejectsInvalidNormalizedConfig(t *testing.T) {
 }
 
 func TestPluginManagerPersistsPluginNormalizedConfig(t *testing.T) {
-	installation := &PluginInstallation{ID: 9, BinarySHA256: strings.Repeat("a", 64)}
+	installation := &PluginInstallation{ID: 9, Manifest: testPluginManifest(nil), BinarySHA256: strings.Repeat("a", 64)}
 	repo := &pluginConfigRepository{installation: installation}
 	client := &normalizingPluginClient{normalized: []byte(`{"timeout":30,"enabled":true}`)}
 	manager := &PluginManager{

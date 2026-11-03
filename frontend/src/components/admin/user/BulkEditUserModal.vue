@@ -90,6 +90,7 @@
 </template>
 
 <script setup lang="ts">
+import { useAuthStore } from '@/stores/auth'
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { adminAPI } from '@/api/admin'
@@ -98,6 +99,8 @@ import type { BatchUpdateUserLimitsRequest } from '@/api/admin/users'
 import { useAppStore } from '@/stores/app'
 import BaseDialog from '@/components/common/BaseDialog.vue'
 import Toggle from '@/components/common/Toggle.vue'
+
+const auth = useAuthStore()
 
 const props = defineProps<{
   show: boolean
@@ -141,6 +144,7 @@ const hasUpdate = computed(() =>
 )
 const selectionTooLarge = computed(() => props.selectedIds.length > MAX_BATCH_USER_IDS)
 const canSubmit = computed(() =>
+  auth.hasPermission('users.update') &&
   props.selectedIds.length > 0
   && !selectionTooLarge.value
   && hasUpdate.value

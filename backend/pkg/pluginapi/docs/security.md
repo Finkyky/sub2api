@@ -27,3 +27,11 @@
 ## 敏感数据
 
 插件处理真实 OAuth Authorization 请求头，必须避免将请求头、请求体、代理凭据和上游敏感响应写入日志或诊断消息。UI 配置中不应出现 OAuth Token。
+
+## schema2 hook/task 最小权限与脱敏
+
+general.v1 示例没有 OAuth outbound、账号目录或身份解析 capability；宿主不通过 hook/task 附带 Authorization/Token。general runtime 使用 SkipHostEnv=true，但子进程不是 OS 沙箱，文件和网络访问仍由运行用户与部署策略控制。
+
+manifest host_capabilities 与配置 target/field/URL 不是授权。task scope 限定 KV keys、network URLs、channel IDs 和 pricing fields；broker 在 Prepare/Commit fenced claim 中检查。pricing-sync 仅消费 host.network body 或显式 task.input.prices，规则在插件；无数据/越限/未授权返回 failed，不编造价格。
+
+输出、配置、业务文本、网络 body 与 KV 按敏感数据处理。示例没有业务日志，错误固定，findings 只有短 rule ID/version/category，不回显片段。普通 run/history 仅状态/错误码/耗时，敏感 output 单独加密授权读取。纯提案取消不提交；自定义外部副作用需独立设计幂等和补偿，ctx 取消不是事务回滚。

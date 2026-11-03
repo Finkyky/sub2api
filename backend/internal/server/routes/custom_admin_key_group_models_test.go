@@ -69,10 +69,10 @@ func TestScopedAdminRegisteredGroupModelInterfaces(t *testing.T) {
 			key, _, err := settings.CreateScopedAdminKey(context.Background(), service.ScopedAdminKeyInput{Name: "分组模型接口", Enabled: true, Policy: policy}, 9)
 			require.NoError(t, err)
 			users := service.NewUserService(&scopedRouteUsers{}, nil, nil, nil)
-			auth := middleware.NewAdminAuthMiddleware(nil, users, settings, nil)
+			auth := middleware.NewAdminAuthMiddleware(nil, users, settings, nil, nil)
 			api := &scopedRouteGroupModels{}
 			r := gin.New()
-			RegisterAdminRoutes(r.Group("/api/v1"), &handler.Handlers{Admin: &handler.AdminHandlers{Group: adminhandler.NewGroupHandler(api, nil, nil)}}, auth, middleware.AuditLogMiddleware(func(c *gin.Context) { c.Next() }), middleware.StepUpAuthMiddleware(func(c *gin.Context) { c.Next() }), nil, nil)
+			RegisterAdminRoutes(r.Group("/api/v1"), &handler.Handlers{Admin: &handler.AdminHandlers{Group: adminhandler.NewGroupHandler(api, nil, nil)}}, auth, middleware.AuditLogMiddleware(func(c *gin.Context) { c.Next() }), middleware.StepUpAuthMiddleware(func(c *gin.Context) { c.Next() }), nil, nil, allowAllRoutePermissionChecker{})
 			for _, tc := range []struct {
 				method, path, body, allowed string
 			}{
@@ -174,9 +174,9 @@ func TestScopedAdminRegisteredGroupModelsUseUpstreamAllowlistSemantics(t *testin
 	settings.SetScopedAdminKeyRepository(&scopedRouteKeys{})
 	key, _, err := settings.CreateScopedAdminKey(context.Background(), service.ScopedAdminKeyInput{Name: "白名单验证", Enabled: true, Policy: adminaccess.Policy{Rules: []adminaccess.Rule{{Permissions: []string{"groups.models.read", "groups.models.write"}, GroupIDs: []int64{2}, Platforms: []string{service.PlatformOpenAI}}}}}, 9)
 	require.NoError(t, err)
-	auth := middleware.NewAdminAuthMiddleware(nil, service.NewUserService(&scopedRouteUsers{}, nil, nil, nil), settings, nil)
+	auth := middleware.NewAdminAuthMiddleware(nil, service.NewUserService(&scopedRouteUsers{}, nil, nil, nil), settings, nil, nil)
 	r := gin.New()
-	RegisterAdminRoutes(r.Group("/api/v1"), &handler.Handlers{Admin: &handler.AdminHandlers{Group: adminhandler.NewGroupHandler(api, nil, nil)}}, auth, middleware.AuditLogMiddleware(func(c *gin.Context) { c.Next() }), middleware.StepUpAuthMiddleware(func(c *gin.Context) { c.Next() }), nil, nil)
+	RegisterAdminRoutes(r.Group("/api/v1"), &handler.Handlers{Admin: &handler.AdminHandlers{Group: adminhandler.NewGroupHandler(api, nil, nil)}}, auth, middleware.AuditLogMiddleware(func(c *gin.Context) { c.Next() }), middleware.StepUpAuthMiddleware(func(c *gin.Context) { c.Next() }), nil, nil, allowAllRoutePermissionChecker{})
 	call := func(body string) *httptest.ResponseRecorder {
 		req := httptest.NewRequest("PUT", "/api/v1/admin/groups/2", strings.NewReader(body))
 		req.Header.Set("x-api-key", key)

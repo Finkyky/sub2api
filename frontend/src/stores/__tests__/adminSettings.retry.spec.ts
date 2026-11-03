@@ -2,6 +2,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
 import { useAdminSettingsStore } from '../adminSettings'
 
+vi.mock('@/stores/auth', () => ({ useAuthStore: () => ({ user: { id: 1, is_super_admin: true }, token: 'test', hasPermission: () => true }) }))
+
 const mocks = vi.hoisted(() => ({ getSettings: vi.fn(), getConfig: vi.fn() }))
 vi.mock('@/api', () => ({ adminAPI: { settings: { getSettings: mocks.getSettings }, payment: { getConfig: mocks.getConfig } } }))
 beforeEach(() => {
@@ -23,8 +25,8 @@ describe('admin settings fetch retry', () => {
     expect(store.loaded).toBe(false)
     expect(store.loading).toBe(false)
     await store.fetch()
-    expect(mocks.getSettings).toHaveBeenCalledTimes(2)
-    expect(mocks.getConfig).toHaveBeenCalledTimes(2)
+    expect(mocks.getSettings).toHaveBeenCalledTimes(source === 'settings' ? 2 : 1)
+    expect(mocks.getConfig).toHaveBeenCalledTimes(source === 'payment' ? 2 : 1)
     expect(store.loaded).toBe(true)
     expect(store.paymentEnabled).toBe(true)
     expect(store.customMenuItems).toEqual([{ id: 'custom', title: 'Custom' }])

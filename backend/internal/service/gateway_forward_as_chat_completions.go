@@ -236,6 +236,7 @@ func (s *GatewayService) handleCCBufferedFromAnthropic(
 	startTime time.Time,
 ) (*ForwardResult, error) {
 	requestID := resp.Header.Get("x-request-id")
+	observer := beginUpstreamResponseModelObservation(c)
 
 	scanner := bufio.NewScanner(resp.Body)
 	maxLineSize := defaultMaxLineSize
@@ -263,6 +264,7 @@ func (s *GatewayService) handleCCBufferedFromAnthropic(
 			continue
 		}
 
+		observer.ObserveAnthropic([]byte(payload))
 		var event apicompat.AnthropicStreamEvent
 		if err := json.Unmarshal([]byte(payload), &event); err != nil {
 			continue
@@ -348,14 +350,16 @@ func (s *GatewayService) handleCCBufferedFromAnthropic(
 	}
 
 	return &ForwardResult{
-		RequestID:       requestID,
-		UpstreamHeaders: resp.Header,
-		Usage:           usage,
-		Model:           originalModel,
-		UpstreamModel:   mappedModel,
-		ReasoningEffort: reasoningEffort,
-		Stream:          false,
-		Duration:        time.Since(startTime),
+		RequestID:                     requestID,
+		UpstreamHeaders:               resp.Header,
+		Usage:                         usage,
+		Model:                         originalModel,
+		UpstreamModel:                 mappedModel,
+		UpstreamResponseModel:         observedUpstreamResponseModel(c),
+		UpstreamResponseModelConflict: observedUpstreamResponseModelConflict(c),
+		ReasoningEffort:               reasoningEffort,
+		Stream:                        false,
+		Duration:                      time.Since(startTime),
 	}, nil
 }
 

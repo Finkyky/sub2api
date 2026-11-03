@@ -70,6 +70,15 @@ func (h *OpenAIGatewayHandler) ChatCompletions(c *gin.Context) {
 		return
 	}
 
+	cacheIntent, cacheBody, cacheErr := service.ParseResultCacheIntent(c.Request.Header, body)
+	if cacheErr != nil {
+		h.errorResponse(c, http.StatusBadRequest, "invalid_request_error", cacheErr.Error())
+		return
+	}
+	body = cacheBody
+	stripChatCacheHeaders(c)
+	// Pin authority before policy-dependent transforms, audit and channel mapping.
+	c.Request = c.Request.WithContext(h.resultCacheService.BindRequestPolicy(c.Request.Context(), cacheIntent, apiKey.GroupID))
 	modelResult := gjson.GetBytes(body, "model")
 	if !modelResult.Exists() || modelResult.Type != gjson.String || modelResult.String() == "" {
 		h.errorResponse(c, http.StatusBadRequest, "invalid_request_error", "model is required")
@@ -144,6 +153,18 @@ func (h *OpenAIGatewayHandler) ChatCompletions(c *gin.Context) {
 		}
 		h.handleStreamingAwareError(c, status, code, message, streamStarted)
 		return
+	}
+
+	cacheCapture, cacheHit, err := beginChatResultCache(c, h.resultCacheService, apiKey, cacheIntent, body, forwardModel)
+	if err != nil {
+		h.errorResponse(c, http.StatusForbidden, "permission_error", err.Error())
+		return
+	}
+	if cacheHit {
+		return
+	}
+	if cacheCapture != nil {
+		defer cacheCapture.finish()
 	}
 
 	// 余额模式在途预留：防止并发请求在预检时看到同一份余额而集体透支。
@@ -253,6 +274,9 @@ func (h *OpenAIGatewayHandler) ChatCompletions(c *gin.Context) {
 		if channelMapping.Mapped {
 			forwardBody = h.gatewayService.ReplaceModelInBody(body, channelMapping.MappedModel)
 		}
+		if cacheCapture != nil {
+			cacheCapture.session.NoteUpstream("")
+		}
 		writerSizeBeforeForward := c.Writer.Size()
 		result, err := func() (*service.OpenAIForwardResult, error) {
 			defer func() {
@@ -262,6 +286,12 @@ func (h *OpenAIGatewayHandler) ChatCompletions(c *gin.Context) {
 			}()
 			return h.gatewayService.ForwardAsChatCompletions(c.Request.Context(), c, account, forwardBody, promptCacheKey, "")
 		}()
+		if err != nil && cacheCapture != nil {
+			cacheCapture.session.Reject()
+		}
+		if result != nil && cacheCapture != nil {
+			cacheCapture.noteForward(c.Request.Context(), result.RequestID, result.UpstreamModel, result.UpstreamResponseModel, result.UpstreamResponseModelConflict)
+		}
 		var cyberBlockBodyChat []byte
 		if service.GetOpsCyberPolicy(c) != nil {
 			cyberBlockBodyChat = body
@@ -292,6 +322,7 @@ func (h *OpenAIGatewayHandler) ChatCompletions(c *gin.Context) {
 			quotaPlatform := service.QuotaPlatform(c.Request.Context(), apiKey)
 			sessionID := service.ExtractClientSessionID(c)
 			cyberBlocked := service.GetOpsCyberPolicy(c) != nil
+			usageFields := clientRequestedUsageFields(c, channelMapping, reqModel, res.UpstreamModel)
 			h.submitOpenAIUsageRecordTask(c.Request.Context(), res, func(ctx context.Context) {
 				if err := h.gatewayService.RecordUsage(ctx, &service.OpenAIRecordUsageInput{
 					Result:             res,
@@ -306,7 +337,7 @@ func (h *OpenAIGatewayHandler) ChatCompletions(c *gin.Context) {
 					APIKeyService:      h.apiKeyService,
 					QuotaPlatform:      quotaPlatform,
 					SessionID:          sessionID,
-					ChannelUsageFields: clientRequestedUsageFields(c, channelMapping, reqModel, res.UpstreamModel),
+					ChannelUsageFields: usageFields,
 					PricingAt:          pricingAt,
 					CyberBlocked:       cyberBlocked,
 				}); err != nil {

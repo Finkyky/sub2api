@@ -1,3 +1,4 @@
+import '@/permissions/__tests__/authorizedFixture'
 import { flushPromises, mount } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import OllamaCloudUsageSettings from '../OllamaCloudUsageSettings.vue'

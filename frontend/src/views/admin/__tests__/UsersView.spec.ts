@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
+import { reactive, ref } from 'vue'
 
 import type { AdminUser } from '@/types'
 import UsersView from '../UsersView.vue'
@@ -46,6 +47,18 @@ vi.mock('@/api/admin', () => ({
   }
 }))
 
+const testLocale = ref('en')
+let authority: { isSuperAdmin: boolean; permissions: string[] }
+vi.mock('@/stores/auth', () => ({
+  useAuthStore: () => ({
+    get isSuperAdmin() { return authority.isSuperAdmin },
+    hasPermission: (code: string) => authority.isSuperAdmin || authority.permissions.includes(code),
+    user: { id: 1 }, refreshUser: vi.fn()
+  })
+}))
+const { getUserRoles } = vi.hoisted(() => ({ getUserRoles: vi.fn() }))
+vi.mock('@/api/admin/rbac', () => ({ rbacAPI: { getUserRoles } }))
+
 vi.mock('@/stores/app', () => ({
   useAppStore: () => ({
     showError,
@@ -58,6 +71,7 @@ vi.mock('vue-i18n', async () => {
   return {
     ...actual,
     useI18n: () => ({
+      locale: testLocale,
       t: (key: string, params?: { count?: number }) =>
         params?.count === undefined ? key : `${key}:${params.count}`
     })
@@ -109,6 +123,7 @@ const DataTableStub = {
       <div v-for="row in data" :key="row.id">
         <slot name="cell-last_used_at" :value="row.last_used_at" :row="row" />
         <div :data-test="'actions-' + row.id"><slot name="cell-actions" :row="row" /></div>
+        <slot name="cell-role" :row="row" :value="row.role" />
       </div>
     </div>
   `
@@ -180,6 +195,9 @@ const getToggleStatusButton = (wrapper: ReturnType<typeof mountBulkDeleteView>, 
 describe('admin UsersView', () => {
   beforeEach(() => {
     vi.useRealTimers()
+    testLocale.value = 'en'
+    authority = reactive({ isSuperAdmin: true, permissions: [] as string[] })
+    getUserRoles.mockReset().mockResolvedValue([])
     localStorage.clear()
 
     listUsers.mockReset()
@@ -207,6 +225,84 @@ describe('admin UsersView', () => {
 
   afterEach(() => {
     vi.useRealTimers()
+  })
+
+
+  it('shows Chinese built-in role badges and role-filter labels without renaming custom roles', async () => {
+    testLocale.value = 'zh'
+    const assigned = [
+      { id: 9, code: 'super_admin', name: 'Super Administrator', is_system: true, is_super_admin: true, permissions: [] },
+      { id: 10, code: 'support', name: 'Support Team', permissions: [] }
+    ]
+    getUserRoles.mockResolvedValue(assigned)
+    const wrapper = mountBulkDeleteView()
+    await flushPromises()
+    expect(wrapper.get('option[value="9"]').text()).toBe('超级管理员')
+    expect(wrapper.findAll('.badge').map(badge => badge.text())).toContain('超级管理员')
+    expect(wrapper.text()).not.toContain('Super Administrator')
+    expect(wrapper.text()).toContain('Support Team')
+    expect(assigned[0].name).toBe('Super Administrator')
+    wrapper.unmount()
+  })
+
+  it('RBAC hides mutation buttons from read-only users', async () => {
+    authority.isSuperAdmin = false
+    authority.permissions = ['users.read']
+    const wrapper = mountBulkDeleteView()
+    await flushPromises()
+    expect(wrapper.find('[data-testid="create-user"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="edit-user-42"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="toggle-user-42"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="roles-user-42"]').exists()).toBe(true)
+    await wrapper.get('[data-test="select-42"]').trigger('click')
+    expect(wrapper.find('[data-test="bulk-delete-users"]').exists()).toBe(false)
+    expect(wrapper.find('[data-test="bulk-edit-limits"]').exists()).toBe(false)
+    wrapper.unmount()
+  })
+
+  it('RBAC locks super users even when identified only by assigned roles', async () => {
+    getUserRoles.mockResolvedValue([{ id: 9, code: 'super_admin', name: 'Super', is_super_admin: true, permissions: [] }])
+    const wrapper = mountBulkDeleteView()
+    await flushPromises()
+    expect(wrapper.find('[data-testid="toggle-user-42"]').exists()).toBe(false)
+    expect(wrapper.text()).toContain('rbac.protectedUser')
+    await wrapper.get('[data-test="select-42"]').trigger('click')
+    expect(wrapper.find('[data-test="bulk-delete-users"]').exists()).toBe(false)
+    wrapper.unmount()
+  })
+
+  it('RBAC does not load users with no read permission', async () => {
+    authority.isSuperAdmin = false
+    authority.permissions = []
+    const wrapper = mountBulkDeleteView()
+    await flushPromises()
+    expect(listUsers).not.toHaveBeenCalled()
+    expect(getUserRoles).not.toHaveBeenCalled()
+    wrapper.unmount()
+  })
+
+  it('RBAC permits basic edits but denies sensitive edits above the actor ceiling', async () => {
+    authority.isSuperAdmin = false
+    authority.permissions = ['users.read', 'users.update', 'users.delete']
+    getUserRoles.mockResolvedValue([{ id: 9, code: 'power', name: 'Power', permissions: ['roles.delete'] }])
+    const wrapper = mountBulkDeleteView()
+    await flushPromises()
+    expect(wrapper.find('[data-testid="edit-user-42"]').exists()).toBe(true)
+    await wrapper.get('[data-testid="edit-user-42"]').trigger('click')
+    expect(wrapper.findComponent({ name: 'UserEditModal' }).props('sensitiveAllowed')).toBe(false)
+    await wrapper.get('[data-test="select-42"]').trigger('click')
+    expect(wrapper.find('[data-test="bulk-delete-users"]').exists()).toBe(false)
+    wrapper.unmount()
+  })
+
+  it('RBAC leaves destructive actions locked on user-role load failure', async () => {
+    getUserRoles.mockRejectedValue(new Error('offline'))
+    const wrapper = mountBulkDeleteView()
+    await flushPromises()
+    expect(wrapper.find('[data-testid="edit-user-42"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="toggle-user-42"]').exists()).toBe(false)
+    expect(wrapper.text()).toContain('rbac.rolesFailed')
+    wrapper.unmount()
   })
 
   it('cancels bulk deletion without deleting or clearing selected users', async () => {

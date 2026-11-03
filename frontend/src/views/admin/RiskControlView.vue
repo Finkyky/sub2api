@@ -16,7 +16,7 @@
               <Icon name="refresh" size="sm" :class="statusLoading ? 'animate-spin' : ''" />
               {{ t('admin.riskControl.refreshStatus') }}
             </button>
-            <button type="button" class="btn btn-primary inline-flex items-center gap-2" @click="openSettings">
+            <button v-permission="'risk_control.manage'" type="button" class="btn btn-primary inline-flex items-center gap-2" @click="openSettings">
               <Icon name="cog" size="sm" />
               {{ t('admin.riskControl.openSettings') }}
             </button>
@@ -334,7 +334,7 @@
                         {{ row.email_sent ? t('admin.riskControl.emailSent') : t('admin.riskControl.emailNotSent') }}
                         <span v-if="row.auto_banned"> / {{ t('admin.riskControl.autoBanned') }}</span>
                       </div>
-                      <button
+                      <button v-permission="'risk_control.manage'"
                         v-if="canUnbanRow(row)"
                         type="button"
                         class="mt-2 inline-flex items-center gap-1 rounded-md border border-emerald-200 bg-emerald-50 px-2 py-1 text-xs font-medium text-emerald-700 transition-colors hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-60 dark:border-emerald-900/60 dark:bg-emerald-900/20 dark:text-emerald-300 dark:hover:bg-emerald-900/30"
@@ -382,7 +382,7 @@
       <BaseDialog :show="settingsOpen" :title="t('admin.riskControl.settingsTitle')" width="extra-wide" @close="settingsOpen = false">
         <div class="space-y-6">
           <div class="flex gap-2 overflow-x-auto border-b border-gray-100 pb-3 dark:border-dark-700">
-            <button
+            <button v-permission="'risk_control.manage'"
               v-for="tab in settingsTabs"
               :key="tab.id"
               type="button"
@@ -459,7 +459,7 @@
                   </div>
                 </div>
                 <div class="flex flex-wrap items-center gap-2">
-                  <button
+                  <button v-permission="'risk_control.manage'"
                     type="button"
                     class="btn btn-secondary inline-flex items-center gap-2"
                     :disabled="apiKeyTesting || inputApiKeyCount === 0 || configForm.clear_api_key"
@@ -468,7 +468,7 @@
                     <Icon name="beaker" size="sm" :class="apiKeyTesting ? 'animate-pulse' : ''" />
                     {{ apiKeyTesting ? t('admin.riskControl.testingApiKeys') : t('admin.riskControl.testInputApiKeys') }}
                   </button>
-                  <button
+                  <button v-permission="'risk_control.manage'"
                     type="button"
                     class="btn btn-secondary inline-flex items-center gap-2"
                     :disabled="apiKeyTesting || effectiveStoredApiKeyCount === 0 || pendingDeletedApiKeyCount > 0 || configForm.clear_api_key || configForm.api_keys_mode === 'replace'"
@@ -852,7 +852,7 @@
                     </p>
                     <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">{{ t('admin.riskControl.flaggedHashHint') }}</p>
                   </div>
-                  <button
+                  <button v-permission="'risk_control.manage'"
                     type="button"
                     class="btn btn-secondary inline-flex items-center justify-center gap-2 text-red-600 hover:text-red-700 dark:text-red-300"
                     :disabled="hashActionLoading || (status?.flagged_hash_count ?? 0) === 0"
@@ -869,7 +869,7 @@
                     class="input font-mono text-sm"
                     :placeholder="t('admin.riskControl.flaggedHashPlaceholder')"
                   />
-                  <button
+                  <button v-permission="'risk_control.manage'"
                     type="button"
                     class="btn btn-secondary inline-flex items-center justify-center gap-2"
                     :disabled="hashActionLoading || !isFlaggedHashInputValid"
@@ -933,7 +933,7 @@
                 <h3 class="text-base font-semibold text-gray-900 dark:text-white">{{ t('admin.riskControl.riskThresholds') }}</h3>
                 <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">{{ t('admin.riskControl.riskThresholdsHint') }}</p>
               </div>
-              <button
+              <button v-permission="'risk_control.manage'"
                 type="button"
                 class="btn btn-secondary inline-flex items-center justify-center gap-2"
                 @click="resetRiskThresholds"
@@ -1069,7 +1069,7 @@
         <template #footer>
           <div class="flex justify-end gap-2">
             <button type="button" class="btn btn-secondary" @click="settingsOpen = false">{{ t('common.cancel') }}</button>
-            <button type="button" class="btn btn-primary inline-flex items-center gap-2" :disabled="saving" @click="saveConfig">
+            <button v-permission="'risk_control.manage'" type="button" class="btn btn-primary inline-flex items-center gap-2" :disabled="saving" @click="saveConfig">
               <Icon v-if="saving" name="refresh" size="sm" class="animate-spin" />
               <Icon v-else name="check" size="sm" />
               {{ saving ? t('common.saving') : t('admin.riskControl.saveConfig') }}

@@ -13,7 +13,7 @@ import (
 )
 
 type channelRepository struct {
-	db *sql.DB
+	db channelDB
 }
 
 // NewChannelRepository 创建渠道数据访问实例

@@ -1,0 +1,15 @@
+{
+  "config_version": 1,
+  "source_url": "https://prices.example.test/v1",
+  "rules": [
+    {
+      "channel_id": 10,
+      "pricing_id": 20,
+      "source_key": "model-a",
+      "field": "input_price",
+      "multiplier": 1,
+      "max_price": 10,
+      "max_change_ratio": 0.5
+    }
+  ]
+}

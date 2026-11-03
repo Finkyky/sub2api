@@ -1,5 +1,7 @@
 export default {
   common: {
+    accessDenied: 'Access denied',
+    accessDeniedHint: 'Your account has no permission to access this page. Contact an administrator.',
     loading: 'Loading...',
     submitting: 'Submitting...',
     justNow: 'just now',
@@ -163,6 +165,8 @@ export default {
 
   // Navigation
   nav: {
+    permissions: 'Permissions',
+    roles: 'Roles',
     dashboard: 'Dashboard',
     announcements: 'Announcements',
     apiKeys: 'API Keys',
@@ -175,6 +179,10 @@ export default {
     affiliateRebateRecords: 'Rebate Records',
     affiliateTransferRecords: 'Transfer Records',
     profile: 'Profile',
+    usersList: 'User List',
+    pluginPackages: 'Plugin Packages',
+    operationsManagement: 'Operations Management',
+    monitoringManagement: 'Monitoring',
     users: 'Users',
     groups: 'Groups',
     channels: 'Channels',
@@ -183,6 +191,10 @@ export default {
     subscriptions: 'Subscriptions',
     accounts: 'Accounts',
     plugins: 'Plugins',
+    pluginInstances: 'Plugin Instances',
+    pluginBindings: 'Plugin Group Bindings',
+    pluginTasks: 'Plugin Tasks',
+    pluginRuns: 'Plugin Runs',
     proxies: 'Proxies',
     redeemCodes: 'Redeem Codes',
     ops: 'Ops',

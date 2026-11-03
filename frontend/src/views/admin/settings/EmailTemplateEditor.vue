@@ -20,7 +20,7 @@
         >
           {{ previewing ? t("admin.settings.emailTemplates.previewing") : t("admin.settings.emailTemplates.preview") }}
         </button>
-        <button
+        <button v-permission="'settings.update'"
           type="button"
           class="btn btn-secondary btn-sm"
           :disabled="loadingTemplate || restoring || !selectedEvent || !selectedLocale"
@@ -28,7 +28,7 @@
         >
           {{ restoring ? t("admin.settings.emailTemplates.restoring") : t("admin.settings.emailTemplates.restoreOfficial") }}
         </button>
-        <button
+        <button v-permission="'settings.update'"
           type="button"
           class="btn btn-primary btn-sm"
           :disabled="loadingTemplate || saving || !canSave"

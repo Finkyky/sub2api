@@ -1,0 +1,43 @@
+# Optional direct-to-Caddy HTTPS overlay. See ONE_CLICK_CN.md for CDN setups.
+# The app port must remain bound to loopback (start.sh verifies this).
+services:
+  sub2api:
+    environment:
+      - SERVER_FRONTEND_URL=https://${SITE_DOMAIN:?SITE_DOMAIN is required for HTTPS}
+      - SERVER_TRUSTED_PROXIES=${SUB2API_HTTPS_PROXY_IP:-172.30.50.10}/32
+      - SECURITY_TRUST_FORWARDED_IP_FOR_API_KEY_ACL=false
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      - SITE_DOMAIN=${SITE_DOMAIN:?SITE_DOMAIN is required for HTTPS}
+    volumes:
+      - ./Caddyfile.docker:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    networks:
+      sub2api-network:
+        ipv4_address: ${SUB2API_HTTPS_PROXY_IP:-172.30.50.10}
+    depends_on:
+      sub2api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:2019/config/"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+networks:
+  sub2api-network:
+    ipam:
+      config:
+        - subnet: ${SUB2API_HTTPS_NETWORK_SUBNET:-172.30.50.0/24}
+volumes:
+  caddy_data:
+  caddy_config:

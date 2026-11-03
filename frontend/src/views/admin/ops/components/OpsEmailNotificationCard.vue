@@ -198,7 +198,7 @@ onMounted(() => {
           </svg>
           {{ t('common.refresh') }}
         </button>
-        <button class="btn btn-sm btn-secondary" :disabled="!config" @click="openEditor">{{ t('common.edit') }}</button>
+        <button v-permission="'ops.manage'" class="btn btn-sm btn-secondary" :disabled="!config" @click="openEditor">{{ t('common.edit') }}</button>
       </div>
     </div>
 
@@ -432,7 +432,7 @@ onMounted(() => {
     <template #footer>
       <div class="flex justify-end gap-2">
         <button class="btn btn-secondary" @click="showEditor = false">{{ t('common.cancel') }}</button>
-        <button class="btn btn-primary" :disabled="saving || !editorValidation.valid" @click="saveConfig">
+        <button v-permission="'ops.manage'" class="btn btn-primary" :disabled="saving || !editorValidation.valid" @click="saveConfig">
           {{ saving ? t('common.saving') : t('common.save') }}
         </button>
       </div>

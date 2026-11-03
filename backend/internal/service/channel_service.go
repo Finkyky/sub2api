@@ -2,10 +2,12 @@ package service
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"math"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -101,8 +103,9 @@ type channelCache struct {
 	groupPlatform           map[int64]string                                    // groupID → platform
 
 	// 冷路径（CRUD 操作）
-	byID     map[int64]*Channel
-	loadedAt time.Time
+	byID       map[int64]*Channel
+	loadedAt   time.Time
+	generation uint64 // in-process invalidation generation, not a policy revision
 }
 
 // ChannelMappingResult 渠道映射查找结果
@@ -166,8 +169,10 @@ type ChannelService struct {
 	pricingService       *PricingService // 用于「可用渠道」展示时回落到全局定价；可为 nil（测试场景）
 	cachePubSub          ChannelCachePubSub
 
-	cache   atomic.Value // *channelCache
-	cacheSF singleflight.Group
+	cache           atomic.Value // *channelCache
+	cacheSF         singleflight.Group
+	cacheMu         sync.Mutex // serialize generation changes with publication
+	cacheGeneration atomic.Uint64
 }
 
 // NewChannelService 创建渠道服务实例。
@@ -186,30 +191,79 @@ func NewChannelService(repo ChannelRepository, groupRepo GroupRepository, authCa
 }
 
 // loadCache 加载或返回缓存的渠道数据
+var errChannelCacheInvalidated = errors.New("channel cache invalidated during build")
+
+func (s *ChannelService) currentCachedSnapshot() *channelCache {
+	if cached, ok := s.cache.Load().(*channelCache); ok && cached != nil &&
+		cached.generation == s.cacheGeneration.Load() && time.Since(cached.loadedAt) < channelCacheTTL {
+		return cached
+	}
+	return nil
+}
+
+// consumeChannelCacheResult is the delivery boundary for every singleflight
+// creator/waiter. A result can have been published before invalidation yet be
+// delivered after it; validate error snapshots too, before propagating errors.
+func (s *ChannelService) consumeChannelCacheResult(ctx context.Context, result singleflight.Result) (*channelCache, bool, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, false, err
+	}
+	if errors.Is(result.Err, errChannelCacheInvalidated) {
+		return nil, true, nil
+	}
+	cache, ok := result.Val.(*channelCache)
+	if ok && cache != nil && cache.generation != s.cacheGeneration.Load() {
+		return nil, true, nil
+	}
+	if result.Err != nil {
+		return nil, false, result.Err
+	}
+	if !ok || cache == nil {
+		return nil, false, fmt.Errorf("unexpected cache type")
+	}
+	return cache, false, nil
+}
+
 func (s *ChannelService) loadCache(ctx context.Context) (*channelCache, error) {
-	if cached, ok := s.cache.Load().(*channelCache); ok && cached != nil {
-		if time.Since(cached.loadedAt) < channelCacheTTL {
+	if scope := resultCacheChannelScope(ctx); scope != nil {
+		cache, err := scope.load(ctx, s)
+		if err == nil {
+			return cache, nil
+		}
+		if ctx.Err() != nil {
+			return nil, ctx.Err()
+		}
+		// Cache eligibility is denied by the sticky request failure; forwarding
+		// retains its original shared TTL/error-cache behavior.
+	}
+	return s.loadSharedCache(ctx)
+}
+
+func (s *ChannelService) loadSharedCache(ctx context.Context) (*channelCache, error) {
+	for {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		if cached := s.currentCachedSnapshot(); cached != nil {
 			return cached, nil
 		}
-	}
-
-	result, err, _ := s.cacheSF.Do("channel_cache", func() (any, error) {
-		// 双重检查
-		if cached, ok := s.cache.Load().(*channelCache); ok && cached != nil {
-			if time.Since(cached.loadedAt) < channelCacheTTL {
+		results := s.cacheSF.DoChan("channel_cache", func() (any, error) {
+			if cached := s.currentCachedSnapshot(); cached != nil {
 				return cached, nil
 			}
+			return s.buildCache(ctx)
+		})
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case result := <-results:
+			cache, retry, err := s.consumeChannelCacheResult(ctx, result)
+			if retry {
+				continue
+			}
+			return cache, err
 		}
-		return s.buildCache(ctx)
-	})
-	if err != nil {
-		return nil, err
 	}
-	cache, ok := result.(*channelCache)
-	if !ok {
-		return nil, fmt.Errorf("unexpected cache type")
-	}
-	return cache, nil
 }
 
 // newEmptyChannelCache 创建空的渠道缓存（所有 map 已初始化）
@@ -277,27 +331,39 @@ func expandMappingToCache(cache *channelCache, ch *Channel, gid int64, platform 
 	}
 }
 
-// storeErrorCache 存入短 TTL 空缓存，防止 DB 错误后紧密重试。
-// 通过回退 loadedAt 使剩余 TTL = channelErrorTTL。
-func (s *ChannelService) storeErrorCache() {
-	errorCache := newEmptyChannelCache()
-	errorCache.loadedAt = time.Now().Add(-(channelCacheTTL - channelErrorTTL))
-	s.cache.Store(errorCache)
+// publishChannelSnapshot atomically checks ownership of the current generation.
+// Neither an old successful build nor its error-TTL snapshot may overwrite a
+// snapshot installed after local invalidation or a remote notification.
+func (s *ChannelService) publishChannelSnapshot(cache *channelCache, generation uint64) bool {
+	cache.generation = generation
+	s.cacheMu.Lock()
+	defer s.cacheMu.Unlock()
+	if generation != s.cacheGeneration.Load() {
+		return false
+	}
+	s.cache.Store(cache)
+	return true
 }
 
-// buildCache 从数据库构建渠道缓存。
-// 使用独立 context 避免请求取消导致空值被长期缓存。
+// buildCache uses a detached, bounded DB context as before. Publication is
+// generation guarded; callers retry discarded work through loadCache.
 func (s *ChannelService) buildCache(ctx context.Context) (*channelCache, error) {
+	generation := s.cacheGeneration.Load()
 	dbCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), channelCacheDBTimeout)
 	defer cancel()
-
 	channels, groupPlatforms, err := s.fetchChannelData(dbCtx)
 	if err != nil {
-		return nil, err
+		errorCache := newEmptyChannelCache()
+		errorCache.loadedAt = time.Now().Add(-(channelCacheTTL - channelErrorTTL))
+		if !s.publishChannelSnapshot(errorCache, generation) {
+			return nil, errChannelCacheInvalidated
+		}
+		return errorCache, err
 	}
-
 	cache := populateChannelCache(channels, groupPlatforms)
-	s.cache.Store(cache)
+	if !s.publishChannelSnapshot(cache, generation) {
+		return nil, errChannelCacheInvalidated
+	}
 	return cache, nil
 }
 
@@ -306,7 +372,6 @@ func (s *ChannelService) fetchChannelData(ctx context.Context) ([]Channel, map[i
 	channels, err := s.repo.ListAll(ctx)
 	if err != nil {
 		slog.Warn("failed to build channel cache", "error", err)
-		s.storeErrorCache()
 		return nil, nil, fmt.Errorf("list all channels: %w", err)
 	}
 
@@ -320,7 +385,6 @@ func (s *ChannelService) fetchChannelData(ctx context.Context) ([]Channel, map[i
 		groupPlatforms, err = s.repo.GetGroupPlatforms(ctx, allGroupIDs)
 		if err != nil {
 			slog.Warn("failed to load group platforms for channel cache", "error", err)
-			s.storeErrorCache()
 			return nil, nil, fmt.Errorf("get group platforms: %w", err)
 		}
 	}
@@ -398,7 +462,7 @@ func (s *ChannelService) invalidateCache() {
 	s.clearCache()
 
 	// 主动重建缓存，确保 CRUD 后立即生效
-	if _, err := s.buildCache(context.Background()); err != nil {
+	if _, err := s.loadCache(context.Background()); err != nil {
 		slog.Warn("failed to rebuild channel cache after invalidation", "error", err)
 	}
 
@@ -409,6 +473,9 @@ func (s *ChannelService) invalidateCache() {
 // invalidateCache prevents notifications received from Redis from being
 // published again in a loop.
 func (s *ChannelService) clearCache() {
+	s.cacheMu.Lock()
+	defer s.cacheMu.Unlock()
+	s.cacheGeneration.Add(1)
 	s.cache.Store((*channelCache)(nil))
 	s.cacheSF.Forget("channel_cache")
 }
@@ -494,7 +561,7 @@ func lookupMappingAcrossPlatforms(cache *channelCache, groupID int64, groupPlatf
 
 // GetChannelForGroup 获取分组关联的渠道（热路径 O(1)）
 func (s *ChannelService) GetChannelForGroup(ctx context.Context, groupID int64) (*Channel, error) {
-	cache, err := s.loadCache(ctx)
+	cache, err := s.loadCacheForGroup(ctx, groupID)
 	if err != nil {
 		return nil, err
 	}
@@ -509,7 +576,7 @@ func (s *ChannelService) GetChannelForGroup(ctx context.Context, groupID int64) 
 
 // GetGroupPlatform 获取分组的平台标识（从缓存）
 func (s *ChannelService) GetGroupPlatform(ctx context.Context, groupID int64) string {
-	cache, err := s.loadCache(ctx)
+	cache, err := s.loadCacheForGroup(ctx, groupID)
 	if err != nil {
 		return ""
 	}
@@ -526,7 +593,7 @@ type channelLookup struct {
 // lookupGroupChannel 加载缓存并查找分组对应的渠道信息（公共热路径前置逻辑）。
 // 返回 nil 且 err==nil 表示分组无活跃渠道；err!=nil 表示缓存加载失败。
 func (s *ChannelService) lookupGroupChannel(ctx context.Context, groupID int64) (*channelLookup, error) {
-	cache, err := s.loadCache(ctx)
+	cache, err := s.loadCacheForGroup(ctx, groupID)
 	if err != nil {
 		return nil, err
 	}

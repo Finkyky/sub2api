@@ -3,6 +3,8 @@ package middleware
 import (
 	"bytes"
 	"context"
+	"encoding/json"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/ctxkey"
 	"net/http"
 	"net/http/httptest"
 	"sync"
@@ -223,4 +225,73 @@ func TestAuditRecordsEveryMCPOAuthReadWithGrant(t *testing.T) {
 	require.Equal(t, "admin.users.read", logs[0].Action)
 	require.Equal(t, "grant-1", logs[0].Extra["mcp_grant_id"])
 	require.Equal(t, "admin_list_users", logs[0].Extra["mcp_tool"])
+}
+
+func TestRBACRoutesHaveStableAuditActions(t *testing.T) {
+	cases := map[string]string{
+		"POST /api/v1/admin/roles":                "role.created",
+		"PUT /api/v1/admin/roles/:id":             "role.updated",
+		"DELETE /api/v1/admin/roles/:id":          "role.deleted",
+		"PUT /api/v1/admin/roles/:id/permissions": "role.permissions_updated",
+		"PUT /api/v1/admin/users/:id/roles":       "user.roles_updated",
+	}
+	for route, want := range cases {
+		if got := auditActionOverrides[route]; got != want {
+			t.Errorf("audit action for %q = %q, want %q", route, got, want)
+		}
+	}
+	reads := map[string]string{
+		"GET /api/v1/admin/roles":                 "role.listed",
+		"GET /api/v1/admin/roles/:id":             "role.read",
+		"GET /api/v1/admin/permissions":           "permission_catalog.read",
+		"GET /api/v1/admin/roles/:id/permissions": "role.permissions_read",
+		"GET /api/v1/admin/users/:id/roles":       "user.roles_read",
+	}
+	for route, want := range reads {
+		if got := auditSensitiveReads[route]; got != want {
+			t.Errorf("sensitive read action for %q = %q, want %q", route, got, want)
+		}
+	}
+}
+
+func TestRBACAuditMiddlewarePersistsSnapshotAndRequestAttribution(t *testing.T) {
+	repository := &auditCaptureRepository{}
+	audit := service.NewAuditLogService(repository, nil)
+	audit.Start()
+	r := gin.New()
+	r.Use(func(c *gin.Context) {
+		c.Set(string(ContextKeyUser), AuthSubject{UserID: 7})
+		c.Set(ContextKeyAuthEmail, "operator@example.com")
+		c.Set("auth_method", "admin_api_key")
+		c.Next()
+	})
+	r.Use(gin.HandlerFunc(NewAuditLogMiddleware(audit)))
+	r.PUT("/api/v1/admin/roles/:id/permissions", func(c *gin.Context) {
+		SetRBACAuditChange(c, service.RBACMutationAudit{Action: "role.permissions_updated", TargetType: "role", TargetID: 20,
+			Before: &service.RBACAuditState{Role: &service.RBACRole{ID: 20, Permissions: []string{"users.read"}}},
+			After:  &service.RBACAuditState{Role: &service.RBACRole{ID: 20, Permissions: []string{}}}})
+		c.Status(200)
+	})
+	request := httptest.NewRequest("PUT", "/api/v1/admin/roles/20/permissions", bytes.NewBufferString(`{"permissions":[]}`))
+	request.Header.Set("Content-Type", "application/json")
+	request.Header.Set("x-api-key", "secret-rbac-audit-canary-never-record-full")
+	request = request.WithContext(context.WithValue(request.Context(), ctxkey.RequestID, "rbac-request-7"))
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, request)
+	audit.Stop()
+	repository.mu.Lock()
+	defer repository.mu.Unlock()
+	require.Len(t, repository.logs, 1)
+	entry := repository.logs[0]
+	require.Equal(t, "role.permissions_updated", entry.Action)
+	require.EqualValues(t, 7, *entry.ActorUserID)
+	require.Equal(t, "operator@example.com", entry.ActorEmail)
+	require.Equal(t, "admin_api_key", entry.AuthMethod)
+	require.Equal(t, "rbac-request-7", entry.RequestID)
+	require.EqualValues(t, 20, entry.Extra["target_id"])
+	require.NotNil(t, entry.Extra["before"])
+	require.NotNil(t, entry.Extra["after"])
+	encoded, err := json.Marshal(entry)
+	require.NoError(t, err)
+	require.NotContains(t, string(encoded), request.Header.Get("x-api-key"))
 }

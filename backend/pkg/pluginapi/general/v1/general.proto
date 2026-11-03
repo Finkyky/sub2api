@@ -1,0 +1,80 @@
+syntax = "proto3";
+package sub2api.plugin.general.v1;
+option go_package = "github.com/Wei-Shaw/sub2api/pkg/pluginapi/general/v1;generalv1";
+
+// A process owns exactly one immutable instance/config revision after Configure.
+service GeneralPlugin {
+  rpc GetInfo(InfoRequest) returns (InfoResponse);
+  rpc Configure(ConfigureRequest) returns (ConfigureResponse);
+  rpc Check(HookRequest) returns (HookResponse);
+  rpc RunTask(TaskRequest) returns (TaskResponse);
+}
+message InfoRequest {}
+message HookDeclaration {
+  string name = 1;
+  repeated string stages = 2;
+  repeated string protocols = 3;
+  bool can_replace = 4;
+}
+message TaskDeclaration { string name = 1; }
+message InfoResponse {
+  string plugin_id = 1;
+  string plugin_version = 2;
+  uint32 protocol_version = 3;
+  uint32 general_api_version = 4;
+  int64 config_version = 5;
+  repeated string capabilities = 6;
+  repeated HookDeclaration hooks = 7;
+  repeated TaskDeclaration tasks = 8;
+  repeated string host_capabilities = 9;
+}
+message ConfigureRequest {
+  int64 instance_id = 1;
+  int64 config_revision = 2;
+  int64 config_version = 3;
+  bytes config_json = 4;
+}
+message ConfigureResponse {
+  bool accepted = 1;
+  int64 instance_id = 2;
+  int64 config_revision = 3;
+}
+message Content { string media_type = 1; bytes data = 2; }
+message Finding {
+  string rule_id = 1;
+  string rule_version = 2;
+  string category = 3;
+  // oneof preserves the difference between absent and an explicit zero score.
+  oneof confidence { double score = 4; }
+}
+message Rejection { string code = 1; string message = 2; }
+message HookRequest {
+  int64 instance_id = 1;
+  int64 config_revision = 2;
+  string entry = 3;
+  string protocol = 4;
+  string request_id = 5;
+  string attempt_id = 6;
+  int64 group_id = 7;
+  string stage = 8;
+  Content content = 9;
+}
+message HookResponse {
+  string decision = 1;
+  Content content = 2;
+  Rejection rejection = 3;
+  repeated Finding findings = 4;
+}
+message TaskRequest {
+  int64 instance_id = 1;
+  int64 config_revision = 2;
+  string entry = 3;
+  string job_id = 4;
+  bytes input_json = 5;
+}
+message TaskResponse {
+  string status = 1;
+  bool changed = 2;
+  string error_code = 3;
+  bytes output_json = 4;
+}

@@ -103,14 +103,14 @@
             {{ dirty ? t('admin.promptAudit.saveBar.dirty') : t('admin.promptAudit.saveBar.synced') }}
           </span>
           <button type="button" class="btn btn-secondary" :disabled="!dirty || loading.saving" @click="resetDraft">{{ t('common.reset') }}</button>
-          <button type="button" class="btn btn-primary" :disabled="!dirty || loading.saving" data-test="save-config" @click="saveConfig">
+          <button v-permission="'prompt_audit.manage'" type="button" class="btn btn-primary" :disabled="!dirty || loading.saving" data-test="save-config" @click="saveConfig">
             {{ loading.saving ? t('common.saving') : t('common.save') }}
           </button>
         </div>
       </div>
     </div>
 
-    <ConfirmDialog
+    <ConfirmDialog v-if="can('prompt_audit.manage')"
       :show="showBlockingConfirmation"
       :title="t('admin.promptAudit.blockingConfirm.title')"
       :message="t('admin.promptAudit.blockingConfirm.message')"
@@ -119,7 +119,7 @@
       @confirm="confirmBlocking"
       @cancel="showBlockingConfirmation = false"
     />
-    <ConfirmDialog
+    <ConfirmDialog v-if="can('prompt_audit.delete')"
       :show="deleteRequest.mode !== ''"
       :title="t('admin.promptAudit.events.deleteConfirmTitle')"
       :message="t('admin.promptAudit.events.deleteConfirmMessage', { count: deleteRequest.ids.length })"
@@ -128,7 +128,7 @@
       @confirm="confirmIDDelete"
       @cancel="clearDeleteRequest"
     />
-    <FilterDeleteDialog
+    <FilterDeleteDialog v-if="can('prompt_audit.delete')"
       :show="showFilterDelete"
       :initial-filters="filters"
       :preview="deletePreview"
@@ -144,6 +144,8 @@
 </template>
 
 <script setup lang="ts">
+import { usePermission } from '@/composables/usePermission'
+const { can } = usePermission()
 import { computed, defineComponent, h, onMounted, reactive, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import AppLayout from '@/components/layout/AppLayout.vue'

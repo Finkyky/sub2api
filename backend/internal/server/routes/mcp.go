@@ -21,12 +21,13 @@ var mcpRateLimitOptions = ratelimit.RateLimitOptions{FailureMode: ratelimit.Rate
 func RegisterMCPRoutes(v1 *gin.RouterGroup, h *handler.Handlers, audit middleware.AuditLogMiddleware,
 	stepUp middleware.StepUpAuthMiddleware, settings *service.SettingService,
 	limiter *middleware.PanelRateLimiter, allowedOrigins []string, redisClient *redis.Client,
+	rbac ...middleware.PermissionChecker,
 ) {
 	inner := gin.New()
 	inner.Use(gin.Recovery())
 	api := inner.Group("/api/v1")
 	RegisterUserRoutes(api, h, middleware.JWTAuthMiddleware(managementmcp.DispatchAuth(false)), audit, settings, limiter)
-	RegisterAdminRoutes(api, h, middleware.AdminAuthMiddleware(managementmcp.DispatchAuth(true)), audit, stepUp, settings, limiter)
+	RegisterAdminRoutes(api, h, middleware.AdminAuthMiddleware(managementmcp.DispatchAuth(true)), audit, stepUp, settings, limiter, rbac...)
 	transport := managementmcp.NewHandler(inner, allowedOrigins)
 	var handlers []gin.HandlerFunc
 	if redisClient != nil {

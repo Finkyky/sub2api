@@ -7,7 +7,7 @@
     :show-close-button="canClose"
     @close="handleClose"
   >
-    <form id="bulk-subscription-action-form" class="space-y-4" novalidate @submit.prevent="submit">
+    <form v-permission="'subscriptions.update'" id="bulk-subscription-action-form" class="space-y-4" novalidate @submit.prevent="submit">
       <div>
         <p class="mb-2 text-sm font-medium text-gray-900 dark:text-gray-100">
           {{ t('admin.subscriptions.bulk.confirmTargets', { count: targets.length }) }}
@@ -100,7 +100,7 @@
         <button type="button" class="btn btn-secondary" :disabled="!canClose" @click="handleClose">
           {{ result ? t('common.close') : t('common.cancel') }}
         </button>
-        <button
+        <button v-permission="'subscriptions.update'"
           v-if="!result"
           type="submit"
           form="bulk-subscription-action-form"

@@ -14,7 +14,7 @@
     <div class="flex flex-wrap items-center gap-1.5">
       <slot name="pre-actions" />
 
-      <button
+      <button v-permission="'accounts.update'"
         type="button"
         class="inline-flex items-center gap-0.5 rounded px-1.5 py-0.5 text-[10px] font-medium text-blue-600 transition-colors hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-50 dark:text-blue-400 dark:hover:bg-blue-900/30"
         :disabled="loading || resetting"
@@ -38,7 +38,7 @@
         {{ t('admin.accounts.openaiQuotaReset.count') }}<span v-if="data"> {{ availableResetCount }}</span>
       </button>
 
-      <button
+      <button v-permission="'accounts.update'"
         type="button"
         class="inline-flex items-center gap-0.5 rounded px-1.5 py-0.5 text-[10px] font-medium text-orange-600 transition-colors hover:bg-orange-50 disabled:cursor-not-allowed disabled:opacity-50 dark:text-orange-400 dark:hover:bg-orange-900/30"
         :disabled="resetting || loading || !canReset"
@@ -167,7 +167,7 @@
       {{ resetMessage }}
     </div>
 
-    <ConfirmDialog
+    <ConfirmDialog v-if="can('accounts.update')"
       :show="showResetConfirm"
       :title="t('admin.accounts.openaiQuotaReset.confirmTitle')"
       :message="t('admin.accounts.openaiQuotaReset.confirmMessage', { count: availableResetCount })"
@@ -181,6 +181,8 @@
 </template>
 
 <script setup lang="ts">
+import { usePermission } from '@/composables/usePermission'
+const { can } = usePermission()
 import { ref, computed, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { Account } from '@/types'

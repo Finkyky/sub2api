@@ -12,6 +12,9 @@ const routerHarness = vi.hoisted(() => ({
 
 const authStore = vi.hoisted(() => ({
   checkAuth: vi.fn(),
+  refreshUser: vi.fn().mockResolvedValue({}),
+  hasPermission: vi.fn(() => true),
+  isSuperAdmin: false,
   isAuthenticated: true,
   isAdmin: false,
   isSimpleMode: false,
@@ -34,6 +37,7 @@ const appStore = vi.hoisted(() => ({
 vi.mock('vue-router', () => ({
   createWebHistory: vi.fn(() => ({})),
   createRouter: vi.fn(() => ({
+    resolve: vi.fn(() => ({ meta: {} })),
     beforeEach: vi.fn((guard: NavigationGuard) => {
       routerHarness.guard = guard
     }),

@@ -177,7 +177,7 @@ func (r *userRepository) create(ctx context.Context, userIn *service.User, guard
 }
 
 func (r *userRepository) GetByID(ctx context.Context, id int64) (*service.User, error) {
-	m, err := r.client.User.Query().Where(dbuser.IDEQ(id)).Only(ctx)
+	m, err := clientFromContext(ctx, r.client).User.Query().Where(dbuser.IDEQ(id)).Only(ctx)
 	if err != nil {
 		return nil, translatePersistenceError(err, service.ErrUserNotFound, nil)
 	}
@@ -247,7 +247,7 @@ func (r *userRepository) Update(ctx context.Context, userIn *service.User, field
 	}
 
 	// 使用 ent 事务包裹用户更新与 allowed_groups 同步，避免跨层事务不一致。
-	tx, err := r.client.Tx(ctx)
+	tx, err := clientFromContext(ctx, r.client).Tx(ctx)
 	if err != nil && !errors.Is(err, dbent.ErrTxStarted) {
 		return err
 	}
@@ -1461,7 +1461,7 @@ func (r *userRepository) loadAllowedGroups(ctx context.Context, userIDs []int64)
 		return out, nil
 	}
 
-	rows, err := r.client.UserAllowedGroup.Query().
+	rows, err := clientFromContext(ctx, r.client).UserAllowedGroup.Query().
 		Where(userallowedgroup.UserIDIn(userIDs...)).
 		All(ctx)
 	if err != nil {

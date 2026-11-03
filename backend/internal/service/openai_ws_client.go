@@ -12,6 +12,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/Wei-Shaw/sub2api/internal/pkg/codexclient"
 	openaiwsv2 "github.com/Wei-Shaw/sub2api/internal/service/openai_ws_v2"
 	coderws "github.com/coder/websocket"
 	"github.com/coder/websocket/wsjson"
@@ -132,6 +133,11 @@ func (d *coderOpenAIWSClientDialer) Dial(
 			return true
 		},
 	}
+	target, _ := url.Parse(targetURL)
+	aligned := codexLinuxClientProfile.Load() && codexclient.IsCodexURL(target)
+	if aligned {
+		return d.dialCodexAligned(ctx, targetURL, headers, proxyURL)
+	}
 	if proxy := strings.TrimSpace(proxyURL); proxy != "" {
 		proxyClient, err := d.proxyHTTPClient(proxy)
 		if err != nil {
@@ -167,22 +173,36 @@ func (d *coderOpenAIWSClientDialer) Dial(
 }
 
 func (d *coderOpenAIWSClientDialer) proxyHTTPClient(proxy string) (*http.Client, error) {
+	return d.proxyHTTPClientForProfile(proxy, false)
+}
+
+func (d *coderOpenAIWSClientDialer) proxyHTTPClientForProfile(proxy string, aligned bool) (*http.Client, error) {
 	if d == nil {
 		return nil, errors.New("openai ws dialer is nil")
 	}
 	normalizedProxy := strings.TrimSpace(proxy)
-	if normalizedProxy == "" {
+	if normalizedProxy == "" && !aligned {
 		return nil, errors.New("proxy url is empty")
 	}
 	parsedProxyURL, err := url.Parse(normalizedProxy)
 	if err != nil {
+		if aligned {
+			return nil, errors.New("invalid Codex proxy URL")
+		}
 		return nil, fmt.Errorf("invalid proxy url: %w", err)
+	}
+	if normalizedProxy == "" {
+		parsedProxyURL = nil
+	}
+	cacheKey := normalizedProxy
+	if aligned {
+		cacheKey += "|" + codexclient.Profile
 	}
 	now := time.Now().UnixNano()
 
 	d.proxyMu.Lock()
 	defer d.proxyMu.Unlock()
-	if entry, ok := d.proxyClients[normalizedProxy]; ok && entry != nil && entry.client != nil {
+	if entry, ok := d.proxyClients[cacheKey]; ok && entry != nil && entry.client != nil {
 		entry.lastUsedUnixNano = now
 		d.proxyHits.Add(1)
 		return entry.client, nil
@@ -196,8 +216,18 @@ func (d *coderOpenAIWSClientDialer) proxyHTTPClient(proxy string) (*http.Client,
 		TLSHandshakeTimeout: 10 * time.Second,
 		ForceAttemptHTTP2:   true,
 	}
+	if aligned {
+		if err := codexclient.ConfigureTransport(transport, parsedProxyURL, true); err != nil {
+			return nil, err
+		}
+	}
 	client := &http.Client{Transport: transport}
-	d.proxyClients[normalizedProxy] = &openAIWSProxyClientEntry{
+	if aligned {
+		client.CheckRedirect = func(*http.Request, []*http.Request) error {
+			return http.ErrUseLastResponse
+		}
+	}
+	d.proxyClients[cacheKey] = &openAIWSProxyClientEntry{
 		client:           client,
 		lastUsedUnixNano: now,
 	}

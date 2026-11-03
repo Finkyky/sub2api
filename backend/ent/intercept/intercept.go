@@ -31,11 +31,14 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/paymentorder"
 	"github.com/Wei-Shaw/sub2api/ent/paymentproviderinstance"
 	"github.com/Wei-Shaw/sub2api/ent/pendingauthsession"
+	"github.com/Wei-Shaw/sub2api/ent/permission"
 	"github.com/Wei-Shaw/sub2api/ent/predicate"
 	"github.com/Wei-Shaw/sub2api/ent/promocode"
 	"github.com/Wei-Shaw/sub2api/ent/promocodeusage"
 	"github.com/Wei-Shaw/sub2api/ent/proxy"
 	"github.com/Wei-Shaw/sub2api/ent/redeemcode"
+	"github.com/Wei-Shaw/sub2api/ent/role"
+	"github.com/Wei-Shaw/sub2api/ent/rolepermission"
 	"github.com/Wei-Shaw/sub2api/ent/securitysecret"
 	"github.com/Wei-Shaw/sub2api/ent/setting"
 	"github.com/Wei-Shaw/sub2api/ent/subscriptionplan"
@@ -47,6 +50,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/userattributedefinition"
 	"github.com/Wei-Shaw/sub2api/ent/userattributevalue"
 	"github.com/Wei-Shaw/sub2api/ent/userplatformquota"
+	"github.com/Wei-Shaw/sub2api/ent/userrole"
 	"github.com/Wei-Shaw/sub2api/ent/usersubscription"
 )
 
@@ -727,6 +731,33 @@ func (f TraversePendingAuthSession) Traverse(ctx context.Context, q ent.Query) e
 	return fmt.Errorf("unexpected query type %T. expect *ent.PendingAuthSessionQuery", q)
 }
 
+// The PermissionFunc type is an adapter to allow the use of ordinary function as a Querier.
+type PermissionFunc func(context.Context, *ent.PermissionQuery) (ent.Value, error)
+
+// Query calls f(ctx, q).
+func (f PermissionFunc) Query(ctx context.Context, q ent.Query) (ent.Value, error) {
+	if q, ok := q.(*ent.PermissionQuery); ok {
+		return f(ctx, q)
+	}
+	return nil, fmt.Errorf("unexpected query type %T. expect *ent.PermissionQuery", q)
+}
+
+// The TraversePermission type is an adapter to allow the use of ordinary function as Traverser.
+type TraversePermission func(context.Context, *ent.PermissionQuery) error
+
+// Intercept is a dummy implementation of Intercept that returns the next Querier in the pipeline.
+func (f TraversePermission) Intercept(next ent.Querier) ent.Querier {
+	return next
+}
+
+// Traverse calls f(ctx, q).
+func (f TraversePermission) Traverse(ctx context.Context, q ent.Query) error {
+	if q, ok := q.(*ent.PermissionQuery); ok {
+		return f(ctx, q)
+	}
+	return fmt.Errorf("unexpected query type %T. expect *ent.PermissionQuery", q)
+}
+
 // The PromoCodeFunc type is an adapter to allow the use of ordinary function as a Querier.
 type PromoCodeFunc func(context.Context, *ent.PromoCodeQuery) (ent.Value, error)
 
@@ -833,6 +864,60 @@ func (f TraverseRedeemCode) Traverse(ctx context.Context, q ent.Query) error {
 		return f(ctx, q)
 	}
 	return fmt.Errorf("unexpected query type %T. expect *ent.RedeemCodeQuery", q)
+}
+
+// The RoleFunc type is an adapter to allow the use of ordinary function as a Querier.
+type RoleFunc func(context.Context, *ent.RoleQuery) (ent.Value, error)
+
+// Query calls f(ctx, q).
+func (f RoleFunc) Query(ctx context.Context, q ent.Query) (ent.Value, error) {
+	if q, ok := q.(*ent.RoleQuery); ok {
+		return f(ctx, q)
+	}
+	return nil, fmt.Errorf("unexpected query type %T. expect *ent.RoleQuery", q)
+}
+
+// The TraverseRole type is an adapter to allow the use of ordinary function as Traverser.
+type TraverseRole func(context.Context, *ent.RoleQuery) error
+
+// Intercept is a dummy implementation of Intercept that returns the next Querier in the pipeline.
+func (f TraverseRole) Intercept(next ent.Querier) ent.Querier {
+	return next
+}
+
+// Traverse calls f(ctx, q).
+func (f TraverseRole) Traverse(ctx context.Context, q ent.Query) error {
+	if q, ok := q.(*ent.RoleQuery); ok {
+		return f(ctx, q)
+	}
+	return fmt.Errorf("unexpected query type %T. expect *ent.RoleQuery", q)
+}
+
+// The RolePermissionFunc type is an adapter to allow the use of ordinary function as a Querier.
+type RolePermissionFunc func(context.Context, *ent.RolePermissionQuery) (ent.Value, error)
+
+// Query calls f(ctx, q).
+func (f RolePermissionFunc) Query(ctx context.Context, q ent.Query) (ent.Value, error) {
+	if q, ok := q.(*ent.RolePermissionQuery); ok {
+		return f(ctx, q)
+	}
+	return nil, fmt.Errorf("unexpected query type %T. expect *ent.RolePermissionQuery", q)
+}
+
+// The TraverseRolePermission type is an adapter to allow the use of ordinary function as Traverser.
+type TraverseRolePermission func(context.Context, *ent.RolePermissionQuery) error
+
+// Intercept is a dummy implementation of Intercept that returns the next Querier in the pipeline.
+func (f TraverseRolePermission) Intercept(next ent.Querier) ent.Querier {
+	return next
+}
+
+// Traverse calls f(ctx, q).
+func (f TraverseRolePermission) Traverse(ctx context.Context, q ent.Query) error {
+	if q, ok := q.(*ent.RolePermissionQuery); ok {
+		return f(ctx, q)
+	}
+	return fmt.Errorf("unexpected query type %T. expect *ent.RolePermissionQuery", q)
 }
 
 // The SecuritySecretFunc type is an adapter to allow the use of ordinary function as a Querier.
@@ -1132,6 +1217,33 @@ func (f TraverseUserPlatformQuota) Traverse(ctx context.Context, q ent.Query) er
 	return fmt.Errorf("unexpected query type %T. expect *ent.UserPlatformQuotaQuery", q)
 }
 
+// The UserRoleFunc type is an adapter to allow the use of ordinary function as a Querier.
+type UserRoleFunc func(context.Context, *ent.UserRoleQuery) (ent.Value, error)
+
+// Query calls f(ctx, q).
+func (f UserRoleFunc) Query(ctx context.Context, q ent.Query) (ent.Value, error) {
+	if q, ok := q.(*ent.UserRoleQuery); ok {
+		return f(ctx, q)
+	}
+	return nil, fmt.Errorf("unexpected query type %T. expect *ent.UserRoleQuery", q)
+}
+
+// The TraverseUserRole type is an adapter to allow the use of ordinary function as Traverser.
+type TraverseUserRole func(context.Context, *ent.UserRoleQuery) error
+
+// Intercept is a dummy implementation of Intercept that returns the next Querier in the pipeline.
+func (f TraverseUserRole) Intercept(next ent.Querier) ent.Querier {
+	return next
+}
+
+// Traverse calls f(ctx, q).
+func (f TraverseUserRole) Traverse(ctx context.Context, q ent.Query) error {
+	if q, ok := q.(*ent.UserRoleQuery); ok {
+		return f(ctx, q)
+	}
+	return fmt.Errorf("unexpected query type %T. expect *ent.UserRoleQuery", q)
+}
+
 // The UserSubscriptionFunc type is an adapter to allow the use of ordinary function as a Querier.
 type UserSubscriptionFunc func(context.Context, *ent.UserSubscriptionQuery) (ent.Value, error)
 
@@ -1208,6 +1320,8 @@ func NewQuery(q ent.Query) (Query, error) {
 		return &query[*ent.PaymentProviderInstanceQuery, predicate.PaymentProviderInstance, paymentproviderinstance.OrderOption]{typ: ent.TypePaymentProviderInstance, tq: q}, nil
 	case *ent.PendingAuthSessionQuery:
 		return &query[*ent.PendingAuthSessionQuery, predicate.PendingAuthSession, pendingauthsession.OrderOption]{typ: ent.TypePendingAuthSession, tq: q}, nil
+	case *ent.PermissionQuery:
+		return &query[*ent.PermissionQuery, predicate.Permission, permission.OrderOption]{typ: ent.TypePermission, tq: q}, nil
 	case *ent.PromoCodeQuery:
 		return &query[*ent.PromoCodeQuery, predicate.PromoCode, promocode.OrderOption]{typ: ent.TypePromoCode, tq: q}, nil
 	case *ent.PromoCodeUsageQuery:
@@ -1216,6 +1330,10 @@ func NewQuery(q ent.Query) (Query, error) {
 		return &query[*ent.ProxyQuery, predicate.Proxy, proxy.OrderOption]{typ: ent.TypeProxy, tq: q}, nil
 	case *ent.RedeemCodeQuery:
 		return &query[*ent.RedeemCodeQuery, predicate.RedeemCode, redeemcode.OrderOption]{typ: ent.TypeRedeemCode, tq: q}, nil
+	case *ent.RoleQuery:
+		return &query[*ent.RoleQuery, predicate.Role, role.OrderOption]{typ: ent.TypeRole, tq: q}, nil
+	case *ent.RolePermissionQuery:
+		return &query[*ent.RolePermissionQuery, predicate.RolePermission, rolepermission.OrderOption]{typ: ent.TypeRolePermission, tq: q}, nil
 	case *ent.SecuritySecretQuery:
 		return &query[*ent.SecuritySecretQuery, predicate.SecuritySecret, securitysecret.OrderOption]{typ: ent.TypeSecuritySecret, tq: q}, nil
 	case *ent.SettingQuery:
@@ -1238,6 +1356,8 @@ func NewQuery(q ent.Query) (Query, error) {
 		return &query[*ent.UserAttributeValueQuery, predicate.UserAttributeValue, userattributevalue.OrderOption]{typ: ent.TypeUserAttributeValue, tq: q}, nil
 	case *ent.UserPlatformQuotaQuery:
 		return &query[*ent.UserPlatformQuotaQuery, predicate.UserPlatformQuota, userplatformquota.OrderOption]{typ: ent.TypeUserPlatformQuota, tq: q}, nil
+	case *ent.UserRoleQuery:
+		return &query[*ent.UserRoleQuery, predicate.UserRole, userrole.OrderOption]{typ: ent.TypeUserRole, tq: q}, nil
 	case *ent.UserSubscriptionQuery:
 		return &query[*ent.UserSubscriptionQuery, predicate.UserSubscription, usersubscription.OrderOption]{typ: ent.TypeUserSubscription, tq: q}, nil
 	default:

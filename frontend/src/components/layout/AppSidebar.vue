@@ -24,8 +24,6 @@
         >
           {{ siteName }}
         </router-link>
-        <!-- Version Badge -->
-        <VersionBadge :version="siteVersion" />
       </div>
     </div>
 
@@ -42,10 +40,13 @@
                 type="button"
                 class="sidebar-link mb-1 w-full"
                 :class="{
-                  'sidebar-link-active': isGroupActive(item) && !isGroupExpanded(item),
+                  'sidebar-link-active': isGroupActive(item) && (sidebarCollapsed || !isGroupExpanded(item)),
                   'sidebar-link-collapsed': sidebarCollapsed
                 }"
                 :title="sidebarCollapsed ? item.label : undefined"
+                :data-sidebar-group="item.path"
+                :aria-expanded="!sidebarCollapsed && isGroupExpanded(item)"
+                :aria-controls="submenuId(item)"
                 @click="handleGroupClick(item)"
               >
                 <component :is="item.icon" class="h-5 w-5 flex-shrink-0" />
@@ -62,13 +63,14 @@
                 </span>
               </button>
               <!-- Children -->
-              <div v-if="!sidebarCollapsed && isGroupExpanded(item)" class="mb-1 ml-4 border-l border-gray-200 pl-2 dark:border-dark-600">
+              <div :id="submenuId(item)" v-show="!sidebarCollapsed && isGroupExpanded(item)" class="mb-1 ml-4 border-l border-gray-200 pl-2 dark:border-dark-600">
                 <router-link
                   v-for="child in item.children"
                   :key="child.path"
                   :to="child.path"
                   class="sidebar-link mb-0.5 py-1.5 text-sm"
-                  :class="{ 'sidebar-link-active': route.path === child.path }"
+                  :id="sidebarTourAnchor(child.path)"
+                  :class="{ 'sidebar-link-active': isChildActive(item, child) }"
                   @click="handleMenuItemClick(child.path)"
                 >
                   <component :is="child.icon" class="h-4 w-4 flex-shrink-0" />
@@ -83,15 +85,7 @@
               class="sidebar-link mb-1"
               :class="{ 'sidebar-link-active': isActive(item.path), 'sidebar-link-collapsed': sidebarCollapsed }"
               :title="sidebarCollapsed ? item.label : undefined"
-              :id="
-                item.path === '/admin/accounts'
-                  ? 'sidebar-channel-manage'
-                  : item.path === '/admin/groups'
-                    ? 'sidebar-group-manage'
-                    : item.path === '/admin/redeem'
-                      ? 'sidebar-wallet'
-                      : undefined
-              "
+              :id="sidebarTourAnchor(item.path)"
               @click="handleMenuItemClick(item.path)"
             >
               <span v-if="item.iconSvg" class="h-5 w-5 flex-shrink-0 sidebar-svg-icon" v-html="sanitizeSvg(item.iconSvg)"></span>
@@ -188,14 +182,15 @@
 </template>
 
 <script setup lang="ts">
+import { filterAdminNavigation, adminLandingPath } from '@/permissions/policy'
 import { computed, h, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useAdminSettingsStore, useAppStore, useAuthStore, useOnboardingStore } from '@/stores'
-import VersionBadge from '@/components/common/VersionBadge.vue'
 import Icon from '@/components/icons/Icon.vue'
 import { sanitizeSvg } from '@/utils/sanitize'
 import { sanitizeUrl } from '@/utils/url'
+import { SIDEBAR_REVEAL_EVENT, sidebarTourAnchor } from '@/utils/sidebarNavigation'
 import { FeatureFlags, makeSidebarFlag } from '@/utils/featureFlags'
 import { resolveSiteBillingMode } from '@/utils/siteBillingMode'
 import { useBatchImageAccess } from '@/composables/useBatchImageAccess'
@@ -227,8 +222,10 @@ function applyFeatureFlags(items: NavItem[]): NavItem[] {
   const out: NavItem[] = []
   for (const item of items) {
     if (item.featureFlag && item.featureFlag() === false) continue
+    if (authStore.isSimpleMode && item.hideInSimpleMode) continue
     if (item.children) {
-      out.push({ ...item, children: applyFeatureFlags(item.children) })
+      const children = applyFeatureFlags(item.children)
+      if (children.length) out.push({ ...item, children })
     } else {
       out.push(item)
     }
@@ -252,7 +249,7 @@ const isAdmin = computed(() => authStore.isAdmin)
 const sidebarNavRef = ref<HTMLElement | null>(null)
 const isDark = ref(document.documentElement.classList.contains('dark'))
 
-const homePath = computed(() => (isAdmin.value ? '/admin/dashboard' : '/dashboard'))
+const homePath = computed(() => (isAdmin.value ? adminLandingPath(authStore) : '/dashboard'))
 
 // Per-group expand/collapse overrides. A group with no entry follows the
 // automatic behavior (expanded while the active route is one of its children);
@@ -263,7 +260,6 @@ const groupExpandOverrides = ref<Map<string, boolean>>(new Map())
 // Site settings from appStore (cached, no flicker)
 const siteName = computed(() => appStore.siteName)
 const siteLogo = computed(() => sanitizeUrl(appStore.siteLogo || '', { allowRelative: true, allowDataUrl: true }))
-const siteVersion = computed(() => appStore.siteVersion)
 const settingsLoaded = computed(() => appStore.publicSettingsLoaded)
 
 // SVG Icon Components
@@ -752,8 +748,7 @@ function buildSelfNavItems(withDashboard: boolean): NavItem[] {
 
 // finalizeNav 合并三重过滤：featureFlag 过滤 + simple 模式过滤。
 function finalizeNav(items: NavItem[]): NavItem[] {
-  const visible = applyFeatureFlags(items)
-  return authStore.isSimpleMode ? visible.filter(item => !item.hideInSimpleMode) : visible
+  return applyFeatureFlags(items)
 }
 
 // User navigation items (for regular users)
@@ -782,39 +777,67 @@ const customMenuItemsForAdmin = computed(() => {
 const adminNavItems = computed((): NavItem[] => {
   const baseItems: NavItem[] = [
     { path: '/admin/dashboard', label: t('nav.dashboard'), icon: DashboardIcon },
-    { path: '/admin/ops', label: t('nav.ops'), icon: ChartIcon, featureFlag: flagOpsMonitoring },
-    { path: '/admin/users', label: t('nav.users'), icon: UsersIcon, hideInSimpleMode: true },
-    { path: '/admin/groups', label: t('nav.groups'), icon: FolderIcon },
+    {
+      path: '/admin/users',
+      label: t('nav.users'),
+      icon: UsersIcon,
+      expandOnly: true,
+      children: [
+        { path: '/admin/users', label: t('nav.usersList'), icon: UsersIcon, hideInSimpleMode: true },
+        { path: '/admin/roles', label: t('nav.roles'), icon: ShieldIcon },
+        { path: '/admin/permissions', label: t('nav.permissions'), icon: ShieldIcon },
+      ],
+    },
     {
       path: '/admin/channels',
       label: t('nav.channelManagement'),
       icon: ChannelIcon,
-      hideInSimpleMode: true,
       expandOnly: true,
       children: [
-        { path: '/admin/channels/pricing', label: t('nav.channelPricing'), icon: PriceTagIcon },
-        { path: '/admin/channels/monitor', label: t('nav.channelMonitor'), icon: SignalIcon, featureFlag: flagChannelMonitor },
+        { path: '/admin/accounts', label: t('nav.accounts'), icon: GlobeIcon },
+        { path: '/admin/groups', label: t('nav.groups'), icon: FolderIcon },
+        { path: '/admin/channels/pricing', label: t('nav.channelPricing'), icon: PriceTagIcon, hideInSimpleMode: true },
+        { path: '/admin/channels/monitor', label: t('nav.channelMonitor'), icon: SignalIcon, hideInSimpleMode: true, featureFlag: flagChannelMonitor },
+        { path: '/admin/proxies', label: t('nav.proxies'), icon: ServerIcon },
       ],
     },
-    // 「仅充值」站点连管理端的「订阅管理」入口也一并收起（路由本身不拦截）。
-    { path: '/admin/subscriptions', label: t('nav.subscriptions'), icon: CreditCardIcon, hideInSimpleMode: true, featureFlag: flagSubscription },
-    { path: '/admin/accounts', label: t('nav.accounts'), icon: GlobeIcon },
-    { path: '/admin/plugins', label: t('nav.plugins'), icon: PluginIcon, featureFlag: flagPluginManagement },
-    { path: '/admin/announcements', label: t('nav.announcements'), icon: BellIcon },
-    { path: '/admin/proxies', label: t('nav.proxies'), icon: ServerIcon },
+    {
+      path: '/admin/plugins',
+      label: t('nav.plugins'),
+      icon: PluginIcon,
+      expandOnly: true,
+      featureFlag: flagPluginManagement,
+      children: [
+        { path: '/admin/plugins', label: t('nav.pluginPackages'), icon: PluginIcon },
+        { path: '/admin/plugin-instances', label: t('nav.pluginInstances'), icon: PluginIcon },
+        { path: '/admin/plugin-bindings', label: t('nav.pluginBindings'), icon: PluginIcon },
+        { path: '/admin/plugin-tasks', label: t('nav.pluginTasks'), icon: PluginIcon },
+        { path: '/admin/plugin-runs', label: t('nav.pluginRuns'), icon: PluginIcon },
+      ],
+    },
+    {
+      path: '/admin/operations',
+      label: t('nav.operationsManagement'),
+      icon: BellIcon,
+      expandOnly: true,
+      children: [
+        { path: '/admin/subscriptions', label: t('nav.subscriptions'), icon: CreditCardIcon, hideInSimpleMode: true, featureFlag: flagSubscription },
+        { path: '/admin/announcements', label: t('nav.announcements'), icon: BellIcon },
+        { path: '/admin/redeem', label: t('nav.redeemCodes'), icon: TicketIcon, hideInSimpleMode: true },
+        { path: '/admin/promo-codes', label: t('nav.promoCodes'), icon: GiftIcon, hideInSimpleMode: true },
+      ],
+    },
     {
       path: '/admin/security-audit',
       label: t('nav.securityAudit'),
       icon: ShieldIcon,
       expandOnly: true,
-      featureFlag: flagRiskControl,
       children: [
-        { path: '/admin/risk-control', label: t('nav.contentModeration'), icon: ShieldIcon },
-        { path: '/admin/prompt-audit', label: t('nav.promptAudit'), icon: ShieldIcon },
+        { path: '/admin/audit-logs', label: t('nav.auditLogs'), icon: ShieldIcon, hideInSimpleMode: true },
+        { path: '/admin/risk-control', label: t('nav.contentModeration'), icon: ShieldIcon, featureFlag: flagRiskControl },
+        { path: '/admin/prompt-audit', label: t('nav.promptAudit'), icon: ShieldIcon, featureFlag: flagRiskControl },
       ],
     },
-    { path: '/admin/redeem', label: t('nav.redeemCodes'), icon: TicketIcon, hideInSimpleMode: true },
-    { path: '/admin/promo-codes', label: t('nav.promoCodes'), icon: GiftIcon, hideInSimpleMode: true },
     {
       path: '/admin/affiliates',
       label: t('nav.affiliateManagement'),
@@ -841,29 +864,37 @@ const adminNavItems = computed((): NavItem[] => {
         { path: '/admin/orders/plans', label: t('nav.paymentPlans'), icon: CreditCardIcon },
       ],
     },
-    { path: '/admin/usage', label: t('nav.usage'), icon: ChartIcon },
-    { path: '/admin/audit-logs', label: t('nav.auditLogs'), icon: ShieldIcon, hideInSimpleMode: true }
+    {
+      path: '/admin/monitoring',
+      label: t('nav.monitoringManagement'),
+      icon: ChartIcon,
+      expandOnly: true,
+      children: [
+        { path: '/admin/ops', label: t('nav.ops'), icon: ChartIcon, featureFlag: flagOpsMonitoring },
+        { path: '/admin/usage', label: t('nav.usage'), icon: ChartIcon },
+      ],
+    },
   ]
 
   const visible = applyFeatureFlags(baseItems)
 
   // 简单模式下，在系统设置前插入 API密钥
   if (authStore.isSimpleMode) {
-    const filtered = visible.filter(item => !item.hideInSimpleMode)
+    const filtered = visible
     filtered.push({ path: '/keys', label: t('nav.apiKeys'), icon: KeyIcon })
     if (flagMCP()) filtered.push({ path: '/settings/mcp', label: t('mcp.title'), icon: MCPIcon })
     filtered.push({ path: '/admin/settings', label: t('nav.settings'), icon: CogIcon })
     for (const cm of customMenuItemsForAdmin.value) {
       filtered.push({ path: `/custom/${cm.id}`, label: cm.label, icon: null, iconSvg: cm.icon_svg })
     }
-    return filtered
+    return filterAdminNavigation(filtered, authStore)
   }
 
   visible.push({ path: '/admin/settings', label: t('nav.settings'), icon: CogIcon })
   for (const cm of customMenuItemsForAdmin.value) {
     visible.push({ path: `/custom/${cm.id}`, label: cm.label, icon: null, iconSvg: cm.icon_svg })
   }
-  return visible
+  return filterAdminNavigation(visible, authStore)
 })
 
 function toggleSidebar() {
@@ -906,7 +937,7 @@ function isActive(path: string): boolean {
 
 function isGroupActive(item: NavItem): boolean {
   if (!item.children) return false
-  return item.children.some(child => route.path === child.path)
+  return item.children.some(child => isActive(child.path))
 }
 
 function isGroupExpanded(item: NavItem): boolean {
@@ -919,25 +950,52 @@ function toggleGroup(item: NavItem) {
   groupExpandOverrides.value.set(item.path, !isGroupExpanded(item))
 }
 
-/**
- * Click handler for collapsible parent items.
- * - When sidebar is collapsed: do nothing (children are not visible).
- * - When `expandOnly` is true: only toggle expand state.
- * - Otherwise (default, e.g. /admin/orders): navigate to the parent path
- *   (router-link semantics) and ensure the group is expanded.
- */
+function submenuId(item: NavItem): string {
+  return `sidebar-submenu-${item.path.replace(/[^a-zA-Z0-9-]/g, '-')}`
+}
+
+function isChildActive(item: NavItem, child: NavItem): boolean {
+  if (!isActive(child.path)) return false
+  return !item.children?.some(other => other.path.length > child.path.length && isActive(other.path))
+}
+
 function handleGroupClick(item: NavItem) {
-  if (sidebarCollapsed.value) return
+  if (sidebarCollapsed.value) {
+    appStore.setSidebarCollapsed(false)
+    groupExpandOverrides.value.set(item.path, true)
+    return
+  }
   if (item.expandOnly) {
     toggleGroup(item)
     return
   }
-  // Push to path and ensure expanded
   if (route.path !== item.path) {
     router.push(item.path)
   }
   groupExpandOverrides.value.set(item.path, true)
 }
+
+// Reveal only an authorized, feature-visible tour entry; unknown selectors are ignored.
+function handleSidebarReveal(event: Event) {
+  const selector: unknown = (event as CustomEvent<unknown>).detail
+  if (typeof selector !== 'string') return
+  const item = adminNavItems.value.find(parent =>
+    parent.children?.some(child => {
+      const anchor = sidebarTourAnchor(child.path)
+      return anchor !== undefined && selector === `#${anchor}`
+    })
+  )
+  if (!item) return
+  appStore.setSidebarCollapsed(false)
+  groupExpandOverrides.value.set(item.path, true)
+  if (window.matchMedia('(max-width: 1023px)').matches) appStore.setMobileOpen(true)
+}
+
+// A newly navigated-to category should open even if it was previously collapsed.
+watch(() => route.path, () => {
+  const activeGroup = adminNavItems.value.find(isGroupActive)
+  if (activeGroup) groupExpandOverrides.value.set(activeGroup.path, true)
+})
 
 // Initialize theme
 const savedTheme = localStorage.getItem('theme')
@@ -951,9 +1009,9 @@ if (
 
 // Fetch admin settings (for feature-gated nav items like Ops).
 watch(
-  isAdmin,
-  (v) => {
-    if (v) {
+  [() => authStore.user?.id, () => authStore.token, () => authStore.hasPermission('settings.read'), () => authStore.hasPermission('payments.read')],
+  () => {
+    if (authStore.hasPermission('settings.read') || authStore.hasPermission('payments.read')) {
       adminSettingsStore.fetch()
     }
   },
@@ -961,8 +1019,9 @@ watch(
 )
 
 onMounted(() => {
+  window.addEventListener(SIDEBAR_REVEAL_EVENT, handleSidebarReveal)
   void refreshBatchImageAccess()
-  if (isAdmin.value) {
+  if (authStore.hasPermission('settings.read') || authStore.hasPermission('payments.read')) {
     adminSettingsStore.fetch()
   }
   // Restore sidebar scroll position after route change re-mounts the component
@@ -976,6 +1035,7 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
+  window.removeEventListener(SIDEBAR_REVEAL_EVENT, handleSidebarReveal)
   if (sidebarNavRef.value) {
     appStore.sidebarScrollTop = sidebarNavRef.value.scrollTop
   }

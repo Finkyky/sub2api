@@ -61,7 +61,7 @@
         <button @click="$emit('close')" class="btn btn-secondary px-5">{{ t('common.cancel') }}</button>
         <button
           @click="handleReplace"
-          :disabled="!selectedGroupId || submitting"
+          :disabled="!selectedGroupId || submitting || !auth.hasPermission('users.update') || !auth.hasPermission('groups.read')"
           class="btn btn-primary px-6"
         >
           <svg v-if="submitting" class="-ml-1 mr-2 h-4 w-4 animate-spin" fill="none" viewBox="0 0 24 24">
@@ -76,6 +76,7 @@
 </template>
 
 <script setup lang="ts">
+import { useAuthStore } from '@/stores/auth'
 import { ref, watch, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useAppStore } from '@/stores/app'
@@ -92,6 +93,8 @@ interface Props {
   allGroups: AdminGroup[]
 }
 
+const auth = useAuthStore()
+
 const props = defineProps<Props>()
 const emit = defineEmits(['close', 'success'])
 const { t } = useI18n()
@@ -102,7 +105,7 @@ const submitting = ref(false)
 
 // 可选的专属标准分组（排除当前 oldGroup）
 const availableGroups = computed(() => {
-  if (!props.oldGroup) return []
+  if (!auth.hasPermission('groups.read') || !props.oldGroup) return []
   return props.allGroups.filter(
     g => g.status === 'active' && g.is_exclusive && g.subscription_type === 'standard' && g.id !== props.oldGroup!.id
   )
@@ -115,7 +118,8 @@ watch(() => props.show, (v) => {
 })
 
 const handleReplace = async () => {
-  if (!props.user || !props.oldGroup || !selectedGroupId.value) return
+  if (!props.user || !props.oldGroup || !selectedGroupId.value || submitting.value || !auth.hasPermission('users.update') || !auth.hasPermission('groups.read')) return
+  if (!availableGroups.value.some(group => group.id === selectedGroupId.value)) return
   submitting.value = true
 
   try {
@@ -126,6 +130,7 @@ const handleReplace = async () => {
   } catch (error) {
     appStore.showError(extractApiErrorMessage(error, t('common.error')))
     console.error('Failed to replace group:', error)
+    appStore.showError(t('common.error'))
   } finally {
     submitting.value = false
   }

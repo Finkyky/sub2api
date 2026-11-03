@@ -455,7 +455,7 @@ func TestMCPOAuthHTTPPermissionAndCredentialBoundaries(t *testing.T) {
 	// cannot become browser REST credentials, even for an administrator owner.
 	rest := gin.New()
 	auth := service.NewAuthService(nil, nil, nil, nil, f.cfg, f.settings, nil, nil, nil, nil, nil, nil, nil)
-	jwtAuth := middleware.NewJWTAuthMiddleware(auth, nil, f.settings, nil)
+	jwtAuth := middleware.NewJWTAuthMiddleware(auth, nil, f.settings, nil, nil)
 	RegisterUserRoutes(rest.Group("/api/v1"), f.handlers, jwtAuth, middleware.AuditLogMiddleware(mcpRouteNext), f.settings, nil)
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/user/mcp/grants", nil)
 	req.Header.Set("Authorization", "Bearer "+admin.AccessToken)

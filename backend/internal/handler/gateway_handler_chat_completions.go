@@ -69,6 +69,15 @@ func (h *GatewayHandler) ChatCompletions(c *gin.Context) {
 		return
 	}
 
+	cacheIntent, cacheBody, cacheErr := service.ParseResultCacheIntent(c.Request.Header, body)
+	if cacheErr != nil {
+		h.chatCompletionsErrorResponse(c, http.StatusBadRequest, "invalid_request_error", cacheErr.Error())
+		return
+	}
+	body = cacheBody
+	stripChatCacheHeaders(c)
+	// Pin authority before policy-dependent transforms, audit and channel mapping.
+	c.Request = c.Request.WithContext(h.resultCacheService.BindRequestPolicy(c.Request.Context(), cacheIntent, apiKey.GroupID))
 	// Extract model and stream
 	modelResult := gjson.GetBytes(body, "model")
 	if !modelResult.Exists() || modelResult.Type != gjson.String || modelResult.String() == "" {
@@ -152,6 +161,18 @@ func (h *GatewayHandler) ChatCompletions(c *gin.Context) {
 		}
 		h.chatCompletionsErrorResponse(c, status, code, message)
 		return
+	}
+
+	cacheCapture, cacheHit, err := beginChatResultCache(c, h.resultCacheService, apiKey, cacheIntent, body, openAIChannelForwardModel(channelMapping, reqModel))
+	if err != nil {
+		h.chatCompletionsErrorResponse(c, http.StatusForbidden, "permission_error", err.Error())
+		return
+	}
+	if cacheHit {
+		return
+	}
+	if cacheCapture != nil {
+		defer cacheCapture.finish()
 	}
 
 	// 余额模式在途预留：防止并发请求在预检时看到同一份余额而集体透支。
@@ -292,6 +313,9 @@ func (h *GatewayHandler) ChatCompletions(c *gin.Context) {
 		if channelMapping.Mapped {
 			forwardBody = h.gatewayService.ReplaceModelInBody(body, channelMapping.MappedModel)
 		}
+		if cacheCapture != nil {
+			cacheCapture.session.NoteUpstream("")
+		}
 		var result *service.ForwardResult
 		setActualUpstreamEndpoint(c, "")
 		if account.Platform == service.PlatformGemini {
@@ -333,6 +357,7 @@ func (h *GatewayHandler) ChatCompletions(c *gin.Context) {
 			quotaPlatform := service.QuotaPlatform(c.Request.Context(), apiKey)
 			sessionID := service.ExtractClientSessionID(c)
 			stampForwardRequestedReasoningEffort(result, service.RequestedReasoningEffortFromContext(c.Request.Context()))
+			usageFields := clientRequestedUsageFields(c, channelMapping, reqModel, result.UpstreamModel)
 			h.submitUsageRecordTask(c.Request.Context(), func(ctx context.Context) {
 				if err := h.gatewayService.RecordUsage(ctx, &service.RecordUsageInput{
 					Result:             result,
@@ -349,7 +374,7 @@ func (h *GatewayHandler) ChatCompletions(c *gin.Context) {
 					RequestPayloadHash: requestPayloadHash,
 					APIKeyService:      h.apiKeyService,
 					SessionID:          sessionID,
-					ChannelUsageFields: clientRequestedUsageFields(c, channelMapping, reqModel, result.UpstreamModel),
+					ChannelUsageFields: usageFields,
 				}); err != nil {
 					reqLog.Error("gateway.cc.record_usage_failed",
 						zap.Int64("account_id", account.ID),
@@ -359,6 +384,12 @@ func (h *GatewayHandler) ChatCompletions(c *gin.Context) {
 			})
 		}
 
+		if err != nil && cacheCapture != nil {
+			cacheCapture.session.Reject()
+		}
+		if result != nil && cacheCapture != nil {
+			cacheCapture.noteForward(c.Request.Context(), result.RequestID, result.UpstreamModel, result.UpstreamResponseModel, result.UpstreamResponseModelConflict)
+		}
 		if err != nil {
 			var failoverErr *service.UpstreamFailoverError
 			if errors.As(err, &failoverErr) {
